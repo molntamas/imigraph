@@ -1,0 +1,18 @@
+{
+  "name": "imigraph-sandcastle",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Sandcastle orchestration for imigraph: GitHub issues -> sandboxed Claude Code -> pull requests",
+  "type": "module",
+  "scripts": {
+    "sandbox:build": "sandcastle docker build-image --dockerfile .sandcastle/Dockerfile --image-name sandcastle:imigraph",
+    "sandbox:setup-github": "tsx .sandcastle/setup-github.mts",
+    "sandbox:run": "tsx .sandcastle/main.mts",
+    "sandbox:shell": "tsx .sandcastle/interactive.mts",
+    "sandbox:smoke": "tsx .sandcastle/smoke.mts"
+  },
+  "devDependencies": {
+    "@ai-hero/sandcastle": "0.12.0",
+    "tsx": "^4.23.15"
+  }
+}

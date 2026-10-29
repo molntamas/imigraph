@@ -1,0 +1,26 @@
+# Runs on every commit: on your machine (pre-commit install) AND inside the sandcastle sandbox
+# (the image pre-installs pre-commit and pre-warms these hooks, see .sandcastle/Dockerfile).
+# The repository is public: the AI agent is subject to the same secret scanning as you.
+repos:
+  - repo: https://github.com/betterleaks/betterleaks
+    rev: v1.9.0
+    hooks:
+      - id: betterleaks
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: detect-private-key
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+      - id: ruff-format

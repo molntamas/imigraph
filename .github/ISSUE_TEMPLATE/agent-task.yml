@@ -1,0 +1,38 @@
+name: Agent task
+description: A task for a sandcastle agent (Claude Code in a sandbox). The agent answers with a pull request.
+labels: ["sandcastle:todo"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Agents do well on small, testable tasks. Write it for a capable colleague who has not seen
+        the rest of your plan. Start the queue with `npm run sandbox:run` (or `-- --issue <number>`).
+        Remove the `sandcastle:todo` label if the task is not ready yet.
+  - type: textarea
+    id: goal
+    attributes:
+      label: Goal
+      description: What should exist or work afterwards, and why.
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete, checkable statements. For numerical work give the expected results, invariants and tolerances.
+      placeholder: |
+        - [ ] `imigraph.diffusion.step(graph, u, dt)` returns the next state of heat diffusion via the graph Laplacian
+        - [ ] Total heat is conserved to 1e-12 on a cycle graph
+        - [ ] Tests cover a path graph and a cycle graph
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and pointers
+      description: Relevant modules, formulas, papers, earlier issues or pull requests.
+  - type: textarea
+    id: out-of-scope
+    attributes:
+      label: Out of scope
+      description: What the agent should explicitly not do in this task.

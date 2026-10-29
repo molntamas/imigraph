@@ -1,0 +1,7 @@
+# Build context for .sandcastle/Dockerfile is the repo root, so the image can pre-install the
+# locked Python dependencies and pre-commit hooks. Keep the context tiny: only what it COPYs.
+*
+!pyproject.toml
+!uv.lock
+!.python-version
+!.pre-commit-config.yaml

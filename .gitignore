@@ -218,3 +218,16 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- secrets: never commit these ---
+.env
+.env.*
+!.env.example
+.sandcastle/.env
+
+# --- sandcastle runtime artifacts ---
+.sandcastle/logs/
+.sandcastle/worktrees/
+
+# --- node (sandcastle orchestrator) ---
+node_modules/
