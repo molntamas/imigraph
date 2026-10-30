@@ -146,14 +146,53 @@ commit referencing `#1`.
 - A second reference system (ballistic kinematics) to exercise the comparison framework with a
   non-diffusive target.
 
-## 7. Status
+## 7. Status (2026-10-30)
 
-- [ ] Phase 0 Docker workflow
-- [ ] Phase 1 Reference system
-- [ ] Phase 2 Graph system
-- [ ] Phase 3 Comparison framework
-- [ ] Phase 4 Experiment + performance guardrails
-- [ ] Phase 5 HTML report
-- [ ] Phase 6 Pyodide GUI
-- [ ] Phase 7 Docs, skills, README
-- [ ] Phase 8 Wrap-up
+- [x] Phase 0 Docker workflow (`compose.yaml`, `docker/entrypoint.sh`, container git hook)
+- [x] Phase 1 Reference system (`imigraph.reference.brownian`, `imigraph.trajectory`)
+- [x] Phase 2 Graph system (`imigraph.graph`)
+- [x] Phase 3 Comparison framework (`imigraph.compare`, validated in `tests/test_compare.py`)
+- [x] Phase 4 Experiment + performance guardrails (`imigraph.experiments`, `tests/test_performance.py`)
+- [x] Phase 5 HTML report (`python -m imigraph report`)
+- [x] Phase 6 Pyodide GUI (`web/`, `docker compose up web`), verified headlessly (`verify` profile)
+- [x] Phase 7 Docs (`docs/`), skills (`.claude/skills/`), README
+- [x] Phase 8 Wrap-up: 45 tests pass in the container, lint and pre-commit clean, branch pushed
+
+Deviations from the plan above, and findings:
+
+- **MSD check is a z-score, not a relative tolerance.** The maximum relative deviation over 60
+  correlated frames reached 8% even for reference-vs-reference, so a fixed 10% tolerance was
+  too close to the noise. The check now compares with the combined standard error (4 sigma);
+  `rtol` remains available as an explicit systematic allowance.
+- **Cell-resolution projection.** Lattice positions are discrete; the KS test would reject at
+  early times because of the grid alone. `GraphHistory.project(cell_rng=...)` makes the
+  resolution claim explicit (see `docs/comparison-method.md`).
+- **One in ten graph seeds fails the marginal check** at 2000 particles (p = 3e-5 once). A
+  20 000-particle diagnostic showed graph-vs-reference KS statistics indistinguishable from
+  reference-vs-reference, so this is the expected false-positive rate, documented, seeds pinned.
+- **Headless verification container.** Instead of the Chrome extension, a separate Playwright
+  image (`docker/verify.Dockerfile`, profile `verify`) opens both pages, checks for JavaScript
+  errors and blank canvases, runs the GUI and saves screenshots. The sandcastle image stays lean.
+- **Git hooks on Windows.** The hook `pre-commit install` writes on Windows has CRLF line
+  endings and a Windows interpreter path; Linux cannot execute it. The dev container uses
+  `docker/git-hooks/pre-commit` through `core.hooksPath`. The same problem affects sandcastle's
+  `preCommit` hook in `.sandcastle/config.mts` (it only installs when no hook file exists), so
+  agent commits in sandcastle would fail on a checkout where the host installed the hook. Not
+  changed here (`.sandcastle/` is out of scope); see follow-ups.
+- **betterleaks needs `GIT_CONFIG_*`.** It runs git without the global config, so the
+  `safe.directory` entry must come through environment variables (set in `compose.yaml`).
+  Sandcastle sessions may need the same.
+- **Matt Pocock skills.** `grill-me` delegates to `grilling`; `wayfinder` depends on a tracker
+  setup and several sibling skills. Only the self-contained `grilling` skill is vendored (MIT,
+  attribution kept) as `.claude/skills/grilling/`; the rest can be added with
+  `npx skills@latest add mattpocock/skills --skill=wayfinder` run inside the container.
+
+## 8. Follow-ups
+
+1. Fix the sandcastle hook problem: in `.sandcastle/config.mts` set `core.hooksPath` to
+   `docker/git-hooks` (or always run `pre-commit install` into a container-side path) and pass
+   `GIT_CONFIG_COUNT/KEY_0/VALUE_0` for `safe.directory`; then run one issue end to end with
+   `npm run sandbox:run` to confirm the whole flow.
+2. Grown spaces and a projection computed from the graph (spectral embedding).
+3. A second reference system (ballistic kinematics) for the comparison framework.
+4. Web Worker for the GUI so long runs do not block the page; progress reporting.

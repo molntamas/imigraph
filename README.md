@@ -4,7 +4,42 @@ Imitating systems with graphs: computational physics and graph-based models in P
 (numpy, scipy, networkx), with a browser GUI running the same Python code in WebAssembly
 (Pyodide/PyScript).
 
-## Development
+## What is here
+
+The first experiment: Brownian motion in a 2D box (the reference) imitated by walker nodes
+hopping on a lattice graph with an edge-rewriting rule, and a comparison framework that decides
+whether the imitation holds. Read [docs/requirements.md](docs/requirements.md) for the goals,
+[docs/architecture.md](docs/architecture.md) for the code layout and
+[docs/comparison-method.md](docs/comparison-method.md) for how the comparison works and how it
+is validated. Plans per issue live in [plans/](plans/).
+
+```bash
+docker compose run --rm dev uv run python -m imigraph report   # writes output/brownian_vs_graph.html
+docker compose up web                                           # live GUI at http://localhost:8000
+```
+
+Open `output/brownian_vs_graph.html` in a browser: animations of the reference, of the graph
+step by step and of the projection, plus the comparison plots and verdict. The GUI runs the same
+Python package in the browser (Pyodide) with parameters of your choice.
+
+## Development in Docker (nothing installed on the host)
+
+All tooling lives in the image sandcastle uses (`sandcastle:imigraph`); `compose.yaml` runs it
+with the repository bind-mounted:
+
+```bash
+docker compose build dev                                        # once, or after .sandcastle/Dockerfile changes
+docker compose run --rm dev uv run pytest                       # tests
+docker compose run --rm dev uv run ruff check .                 # lint
+docker compose run --rm dev pre-commit run --all-files          # secret scan + lint + format
+docker compose run --rm dev bash -c 'git add -A && git commit -m "..."'   # commit with hooks
+docker compose run --rm dev                                     # interactive shell
+docker compose --profile verify run --rm verify                 # headless browser check of the pages
+```
+
+Details and pitfalls (git hooks, line endings, verifying pages) are in the `docker-dev` skill.
+
+### Without Docker
 
 ```bash
 uv sync                                               # Python 3.14 + dependencies into .venv
@@ -14,6 +49,19 @@ pre-commit install                                    # once per clone: secret s
 ```
 
 Conventions for humans and agents: [CLAUDE.md](CLAUDE.md).
+
+## Skills for agents
+
+Project skills in `.claude/skills/` are loaded by Claude Code when a task matches:
+
+| skill | covers |
+| --- | --- |
+| `docker-dev` | running tests, lint, reports, the GUI and commits in the container |
+| `simulation-verification` | reference systems, tolerances, comparison checks and their validation, performance budgets |
+| `graph-rules` | spaces, walker graphs, edge-rewriting rules, initial conditions, projections |
+| `html-report` | the HTML report, SVG plots, `viz.js`, the Pyodide GUI and how to verify pages |
+| `new-skill` | how to write a skill for this repository |
+| `grilling`, `grill-me` | relentless interview to sharpen a plan (vendored from [mattpocock/skills](https://github.com/mattpocock/skills), MIT) |
 
 ## AI agents with sandcastle
 
