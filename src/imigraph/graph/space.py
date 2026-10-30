@@ -45,6 +45,11 @@ class Space(Protocol):
         """Box that contains the projection of every node (used by the comparison)."""
         ...
 
+    @property
+    def cell_size(self) -> np.ndarray:
+        """Side lengths ``(2,)`` of the cell a node represents in the projection."""
+        ...
+
     def edges(self) -> np.ndarray:
         """Undirected edge list without self-loops, shape ``(num_edges, 2)``."""
         ...
@@ -116,6 +121,10 @@ class SquareLattice:
         )
         table.setflags(write=False)
         return table
+
+    @property
+    def cell_size(self) -> np.ndarray:
+        return np.array([self.spacing, self.spacing])
 
     @property
     def box(self) -> Box:

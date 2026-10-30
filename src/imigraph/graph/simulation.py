@@ -58,9 +58,22 @@ class GraphHistory:
     def state(self, frame: int) -> WalkerGraph:
         return WalkerGraph(self.space, self.anchors[frame])
 
-    def project(self) -> Trajectory:
-        """The walkers' 2D positions over time: the graph system's imitation of the reference."""
-        return Trajectory(self.times, self.space.coordinates[self.anchors], self.space.box)
+    def project(self, cell_rng: np.random.Generator | None = None) -> Trajectory:
+        """The walkers' 2D positions over time: the graph system's imitation of the reference.
+
+        By default a walker sits exactly on the coordinates of its node. With ``cell_rng`` each
+        walker is instead placed at a fixed random offset inside the cell of its node (uniform in
+        ``[-spacing/2, spacing/2]^2``, drawn once per walker): the graph then claims to imitate
+        the reference *at the resolution of one cell*, which is the statement the distribution
+        tests of the comparison framework check. Displacements, and therefore the mean squared
+        displacement, are unaffected by the offset.
+        """
+        positions = self.space.coordinates[self.anchors]
+        if cell_rng is not None:
+            cell = self.space.cell_size
+            offsets = cell_rng.uniform(-0.5, 0.5, size=(self.num_walkers, 2)) * cell
+            positions = positions + offsets[None, :, :]
+        return Trajectory(self.times, positions, self.space.box)
 
     def to_dict(self) -> dict:
         """JSON-serialisable description of the space and the recorded walker edges."""
@@ -95,7 +108,7 @@ class GraphSimulation:
         record_every: int = 1,
     ) -> GraphHistory:
         """Apply the rule ``steps`` times, recording every ``record_every``-th state."""
-        if initial.space is not self.space:
+        if initial.space != self.space:
             raise ValueError("initial state must live on the simulation's space")
         if steps < 0 or record_every < 1:
             raise ValueError("steps must be >= 0 and record_every >= 1")

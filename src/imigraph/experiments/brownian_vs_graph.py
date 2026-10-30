@@ -1,0 +1,108 @@
+"""Brownian motion in a box, imitated by random hops of walker nodes on a lattice graph.
+
+The lattice spacing ``a`` and the duration ``tau`` of one rule application fix the diffusion
+coefficient ``D = a^2 / (4 tau)`` of the graph system; the reference is run with that ``D`` in the
+box of the lattice, from the same initial condition (everything at the centre), and recorded at
+the same times. The comparison framework then decides whether the two agree.
+"""
+
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass
+from typing import Any
+
+import numpy as np
+
+from imigraph.compare import ComparisonReport, compare
+from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers_at_node
+from imigraph.graph.simulation import lattice_hop_diffusion
+from imigraph.reference import BrownianBox
+from imigraph.trajectory import Trajectory
+
+
+@dataclass(frozen=True)
+class ExperimentConfig:
+    """Parameters of the experiment; the defaults run in about a second."""
+
+    lattice_size: int = 41
+    spacing: float = 0.2
+    step_time: float = 0.01
+    particles: int = 2000
+    steps: int = 3000
+    record_every: int = 50
+    seed: int = 0
+
+    def __post_init__(self) -> None:
+        if self.steps % self.record_every:
+            raise ValueError("steps must be a multiple of record_every")
+        if self.particles < 2:
+            raise ValueError("at least two particles are needed for the statistics")
+
+    @property
+    def diffusion(self) -> float:
+        """Diffusion coefficient shared by both systems."""
+        return lattice_hop_diffusion(self.spacing, self.step_time)
+
+    @property
+    def lattice(self) -> SquareLattice:
+        return SquareLattice(self.lattice_size, self.spacing)
+
+    @property
+    def reference_system(self) -> BrownianBox:
+        return BrownianBox(diffusion=self.diffusion, dt=self.step_time, box=self.lattice.box)
+
+    @property
+    def graph_system(self) -> GraphSimulation:
+        return GraphSimulation(self.lattice, step_time=self.step_time)
+
+    @property
+    def total_time(self) -> float:
+        return self.steps * self.step_time
+
+    def to_dict(self) -> dict[str, Any]:
+        return {**asdict(self), "diffusion": self.diffusion, "total_time": self.total_time}
+
+
+@dataclass(frozen=True)
+class ExperimentResult:
+    config: ExperimentConfig
+    reference: Trajectory
+    graph_history: GraphHistory
+    graph_projection: Trajectory
+    report: ComparisonReport
+
+    @property
+    def passed(self) -> bool:
+        return self.report.passed
+
+
+def run_reference(config: ExperimentConfig, rng: np.random.Generator) -> Trajectory:
+    system = config.reference_system
+    initial = system.all_at(config.lattice.box.center, config.particles)
+    return system.simulate(initial, config.steps, rng, config.record_every)
+
+
+def run_graph(config: ExperimentConfig, rng: np.random.Generator) -> GraphHistory:
+    lattice = config.lattice
+    initial = walkers_at_node(lattice, lattice.center_node, config.particles)
+    return config.graph_system.run(initial, config.steps, rng, config.record_every)
+
+
+def run_experiment(config: ExperimentConfig | None = None) -> ExperimentResult:
+    """Run both systems from ``config`` (default :class:`ExperimentConfig`) and compare them.
+
+    The reference and the graph system use independent random streams derived from the seed, so
+    changing one system does not change the other's run.
+    """
+    config = ExperimentConfig() if config is None else config
+    reference_rng, graph_rng, cell_rng = np.random.default_rng(config.seed).spawn(3)
+    reference = run_reference(config, reference_rng)
+    history = run_graph(config, graph_rng)
+    projection = history.project(cell_rng=cell_rng)
+    report = compare(
+        reference,
+        projection,
+        reference_label="Brownian motion in a box",
+        candidate_label="random hops on a lattice graph",
+    )
+    return ExperimentResult(config, reference, history, projection, report)
