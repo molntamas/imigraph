@@ -74,6 +74,14 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
         painted = page.evaluate(NONBLANK_PIXELS_JS, canvas)
         assert painted > 500, f"{canvas} looks blank ({painted} painted pixels)"
         print(f"  {canvas}: {painted} painted pixels")
+    for frame in (1, 2, 3):  # match, choose, rewrite phases of the first rule application
+        page.evaluate(
+            "(f) => { const s = document.getElementById('rule-slider'); s.value = f;"
+            " s.dispatchEvent(new Event('input')); }",
+            frame,
+        )
+        page.wait_for_timeout(100)
+        page.locator("#rule-canvas").screenshot(path=str(out / f"rule-phase-{frame}.png"))
     assert page.locator("table tbody tr").count() >= 3, "check table has fewer than 3 rows"
     assert page.locator("svg").count() >= 4, "fewer than 4 SVG plots"
     page.screenshot(path=str(out / "report.png"), full_page=True)
