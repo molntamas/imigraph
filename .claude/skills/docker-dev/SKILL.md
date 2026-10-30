@@ -31,6 +31,17 @@ docker compose --profile verify run --rm verify                # headless check 
 - Ad-hoc Python: `docker compose run --rm -T dev uv run python - <<'EOF' ... EOF` (heredoc on
   stdin). Do not write scratch scripts into the repository.
 
+## If Docker stops answering
+
+The Rancher Desktop VM has about 5 GB of RAM and 2 CPUs. A runaway allocation inside a
+container freezes the whole VM within seconds: `docker` commands then fail with "timed out
+dialing Hyper-V socket" and every container command hangs. Recovery: `rdctl shutdown`, then
+`rdctl start` (both in `%LOCALAPPDATA%\Programs\Rancher Desktop\resources\resources\win32\bin`;
+`rdctl start` blocks the shell, launch it detached), then poll `docker info`. Prevention: run
+new numerical code under a memory cap first (`resource.setrlimit(resource.RLIMIT_AS, ...)` plus
+`faulthandler.dump_traceback_later`), log long runs to a file under `output/` instead of piping
+through `tail`, and wrap docker calls in `timeout`.
+
 ## Committing
 
 Commit from inside the container so the pre-commit hooks (betterleaks secret scan, ruff,

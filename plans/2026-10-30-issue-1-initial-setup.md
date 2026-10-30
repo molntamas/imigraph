@@ -222,6 +222,16 @@ against a Rayleigh law with sigma from the conserved energy) and the entropy ris
 `python -m imigraph gas-report`. Next graph step for it: a lattice-gas rule (HPP/FHP) that
 conserves mass, momentum and energy by construction, compared with the same checks.
 
+## 7b4. Addendum (2026-10-30): phone layout, and a lesson
+
+Pages got a phone layout (tables scroll sideways in their card, tighter cards and type, charts
+and canvases scale to the column); the headless check now asserts no sideways overflow at
+390 px and saves phone screenshots. A bug found on the way: `svg._nice_ticks` looped forever
+when the y-range was a few 1e-16 wide (the gas energy is constant to rounding), allocating
+memory until the Docker VM froze. Fixed with a float-resolution guard and a loop cap, plus a
+regression test. Lesson for agents: run new numerical code under a memory cap first (see the
+`docker-dev` skill).
+
 ## 7c. Convention (2026-10-30, maintainer request): keep a history of result pages
 
 Every run of `python -m imigraph report [--label <change>]` writes a **new** file
