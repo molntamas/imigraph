@@ -5,7 +5,14 @@ import pytest
 
 from imigraph.__main__ import main
 from imigraph.experiments import ExperimentConfig, run_experiment
-from imigraph.report import DEFAULT_FILENAME, build_report, default_demo, write_report
+from imigraph.report import (
+    INDEX_FILENAME,
+    REPORT_STEM,
+    build_report,
+    default_demo,
+    report_filename,
+    write_report,
+)
 
 SMALL = ExperimentConfig(particles=100, steps=200, record_every=20, lattice_size=21, seed=3)
 
@@ -39,12 +46,29 @@ def test_embedded_data_matches_the_experiment(page):
     assert data["config"]["seed"] == 3
 
 
-def test_write_report_into_a_directory_and_a_file(tmp_path):
+def test_every_run_writes_a_new_file_and_keeps_the_old_ones(tmp_path):
     result = run_experiment(SMALL)
-    written = write_report(tmp_path, result=result)
-    assert written == tmp_path / DEFAULT_FILENAME and written.stat().st_size > 10_000
-    explicit = write_report(tmp_path / "custom.html", result=result)
-    assert explicit.name == "custom.html" and explicit.exists()
+    first = write_report(tmp_path, result=result)
+    assert re.fullmatch(rf"{REPORT_STEM}_\d{{4}}-\d\d-\d\d_\d{{6}}\.html", first.name)
+    assert first.stat().st_size > 10_000
+    second = write_report(tmp_path / "custom.html", result=result)
+    assert second.name == "custom.html" and first.exists()
+    index = (tmp_path / INDEX_FILENAME).read_text(encoding="utf-8")
+    assert f'href="{first.name}"' in index and 'href="custom.html"' in index
+    assert index.count("<tr>") == 3  # header + two reports
+    assert sorted(p.name for p in tmp_path.glob("*.html")) == sorted(
+        [first.name, "custom.html", INDEX_FILENAME]
+    )
+
+
+def test_report_filename_is_timestamped():
+    from datetime import UTC, datetime
+
+    when = datetime(2026, 10, 30, 18, 5, 9, tzinfo=UTC)
+    assert report_filename(when) == "brownian_vs_graph_2026-10-30_180509.html"
+    assert report_filename(when, "energy & momentum") == (
+        "brownian_vs_graph_2026-10-30_180509_energy-momentum.html"
+    )
 
 
 def test_cli_report_command(tmp_path, capsys):
@@ -65,4 +89,6 @@ def test_cli_report_command(tmp_path, capsys):
     )
     out = capsys.readouterr().out
     assert code in (0, 1)
-    assert "| msd |" in out and (tmp_path / DEFAULT_FILENAME).exists()
+    assert "| msd |" in out
+    assert len(list(tmp_path.glob(f"{REPORT_STEM}_*.html"))) == 1
+    assert (tmp_path / INDEX_FILENAME).exists()

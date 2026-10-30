@@ -115,7 +115,7 @@ commit referencing `#1`.
 - `tests/test_performance.py` budgets.
 
 ### Phase 5: HTML report
-- SVG plots, page writer, CLI. Generated into `output/brownian_vs_graph.html`.
+- SVG plots, page writer, CLI. Generated into `output/brownian_vs_graph_<time>.html` (see 7c).
 - Tests: page is written, contains the data blob and the section ids, size is bounded;
   `node --check` on the JS asset (run manually in the container, Node is in the image).
 
@@ -197,6 +197,16 @@ per particle; the tests assert stationarity (no trend between halves, agreement 
 within the wall loss, momentum within its expected fluctuations) and that entropy rises
 monotonically to 95% of its maximum and then fluctuates around the plateau. Both systems show
 the same behaviour. Shown as section 5 of the report and section 4 of the GUI.
+
+## 7c. Convention (2026-10-30, maintainer request): keep a history of result pages
+
+Every run of `python -m imigraph report [--label <change>]` writes a **new** file
+`output/brownian_vs_graph_<UTC timestamp>[_<label>].html` and refreshes `output/index.html`
+(newest first, with verdicts). Older pages are never overwritten or deleted, so results of
+earlier versions of the code stay comparable. A page is generated for bigger changes (a new
+system, rule, check, metric or visualisation), not for every commit; the maintainer does not
+want a copy of the big page per version. The same applies to future report types. Agents must
+name the full path of the new file when they report back.
 
 ## 8. Follow-ups
 

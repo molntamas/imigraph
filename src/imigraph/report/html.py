@@ -7,6 +7,7 @@ resources and opens from the file system.
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from html import escape
 from importlib import resources
@@ -22,7 +23,8 @@ from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers
 from imigraph.report import svg
 from imigraph.trajectory import Trajectory
 
-DEFAULT_FILENAME = "brownian_vs_graph.html"
+REPORT_STEM = "brownian_vs_graph"
+INDEX_FILENAME = "index.html"
 
 
 def _asset(name: str) -> str:
@@ -278,17 +280,58 @@ def build_report(
     )
 
 
-def write_report(
-    path: str | Path, config: ExperimentConfig | None = None, result: ExperimentResult | None = None
-) -> Path:
-    """Run the experiment (unless ``result`` is given) and write the page to ``path``.
+def report_filename(when: datetime | None = None, label: str = "") -> str:
+    """``brownian_vs_graph_<UTC timestamp>[_<label>].html``: a new file per run, old runs kept."""
+    when = datetime.now(UTC) if when is None else when
+    suffix = "_" + re.sub(r"[^A-Za-z0-9-]+", "-", label).strip("-") if label else ""
+    return f"{REPORT_STEM}_{when:%Y-%m-%d_%H%M%S}{suffix}.html"
 
-    ``path`` may be a directory, in which case :data:`DEFAULT_FILENAME` is used.
+
+def write_index(directory: Path) -> Path:
+    """``index.html`` listing every report in ``directory``, newest first, with its verdict."""
+    rows = []
+    for page in sorted(directory.glob("*.html"), reverse=True):
+        if page.name == INDEX_FILENAME:
+            continue
+        text = page.read_text(encoding="utf-8", errors="replace")
+        verdict = "pass" if 'class="badge pass"' in text else "fail" if "badge fail" in text else ""
+        modified = datetime.fromtimestamp(page.stat().st_mtime, UTC).strftime("%Y-%m-%d %H:%M UTC")
+        size = page.stat().st_size / 1e6
+        rows.append(
+            f'<tr><td><a href="{escape(page.name)}">{escape(page.name)}</a></td>'
+            f'<td class="{verdict}">{verdict.upper()}</td><td>{modified}</td>'
+            f"<td>{size:.1f} MB</td></tr>"
+        )
+    body = (
+        "<table><thead><tr><th>report</th><th>verdict</th><th>written</th><th>size</th></tr>"
+        "</thead><tbody>" + "".join(rows) + "</tbody></table>"
+        if rows
+        else "<p>No reports yet.</p>"
+    )
+    page = Template(_asset("index.html")).substitute(css=_asset("report.css"), body=body)
+    index = directory / INDEX_FILENAME
+    index.write_text(page, encoding="utf-8")
+    return index
+
+
+def write_report(
+    path: str | Path,
+    config: ExperimentConfig | None = None,
+    result: ExperimentResult | None = None,
+    label: str = "",
+) -> Path:
+    """Run the experiment (unless ``result`` is given) and write the page.
+
+    ``path`` is normally a directory: a new timestamped file (:func:`report_filename`) is
+    created in it (``label`` names the change, e.g. ``"metrics"``) and ``index.html`` there is
+    refreshed, so the history of earlier runs is kept. A path ending in ``.html`` writes exactly
+    that file (and refreshes the index of its directory).
     """
     result = run_experiment(config) if result is None else result
     path = Path(path)
     if path.suffix.lower() != ".html":
-        path = path / DEFAULT_FILENAME
+        path = path / report_filename(label=label)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(build_report(result), encoding="utf-8")
+    write_index(path.parent)
     return path

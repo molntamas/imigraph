@@ -1,7 +1,7 @@
 """Headless browser check of the generated report and the Pyodide GUI (runs in the Playwright
 container, see the `verify` service in compose.yaml).
 
-    docker compose run --rm dev python -m imigraph report   # writes output/brownian_vs_graph.html
+    docker compose run --rm dev python -m imigraph report   # output/brownian_vs_graph_<time>.html
     docker compose --profile verify run --rm verify         # this script
 
 It opens both pages in Chromium, fails on JavaScript errors, checks that the animations have
@@ -102,13 +102,21 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--report", type=Path, default=Path("output/brownian_vs_graph.html"))
+    parser.add_argument(
+        "--report",
+        type=Path,
+        default=None,
+        help="report page to check (default: the newest output/brownian_vs_graph_*.html)",
+    )
     parser.add_argument("--gui", default="http://web:8000/")
     parser.add_argument("--out", type=Path, default=Path("output/screenshots"))
     parser.add_argument("--timeout", type=int, default=300_000, help="GUI timeout in ms")
     parser.add_argument("--skip-gui", action="store_true")
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.report is None:
+        candidates = sorted(Path("output").glob("brownian_vs_graph_*.html"))
+        args.report = candidates[-1] if candidates else Path("output/brownian_vs_graph_none.html")
 
     failures: list[str] = []
     with sync_playwright() as playwright:

@@ -32,6 +32,9 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument(
         "--out", default="output", help="directory or .html file (default: output/)"
     )
+    report.add_argument(
+        "--label", default="", help="short name of the change, appended to the file name"
+    )
     add_config_options(report)
     return parser
 
@@ -48,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "report":
         from imigraph.report import write_report
 
-        path = write_report(args.out, result=result)
+        path = write_report(args.out, result=result, label=args.label)
         print(f"\nWrote {path.resolve()}")
     return 0 if result.passed else 1
 

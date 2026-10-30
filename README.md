@@ -14,11 +14,12 @@ whether the imitation holds. Read [docs/requirements.md](docs/requirements.md) f
 is validated. Plans per issue live in [plans/](plans/).
 
 ```bash
-docker compose run --rm dev uv run python -m imigraph report   # writes output/brownian_vs_graph.html
+docker compose run --rm dev uv run python -m imigraph report   # writes output/brownian_vs_graph_<time>.html
 docker compose up web                                           # live GUI at http://localhost:8000
 ```
 
-Open `output/brownian_vs_graph.html` in a browser: animations of the reference, of the graph
+Every run writes a new timestamped page and keeps the older ones; `output/index.html` lists
+them, newest first. Open the newest one in a browser: animations of the reference, of the graph
 step by step and of the projection, plus the comparison plots and verdict. The GUI runs the same
 Python package in the browser (Pyodide) with parameters of your choice.
 

@@ -8,7 +8,12 @@ description: How imigraph produces its HTML outputs - the self-contained report 
 Two outputs share the same data and drawing code:
 
 - **Report** (`imigraph.report.html.build_report`): one self-contained HTML file written to
-  `output/` by `python -m imigraph report`. Template `report/assets/report.html` uses
+  `output/` by `python -m imigraph report --label <change>`. **Every run creates a new
+  timestamped file** (`brownian_vs_graph_<UTC time>_<label>.html`) and refreshes
+  `output/index.html`; never overwrite or delete earlier pages, the maintainer wants the
+  history of results. Generate a page for bigger changes (new system, rule, check, metric,
+  visualisation), not for every commit. Tell the user the full path of the new file.
+  Template `report/assets/report.html` uses
   `string.Template` placeholders (`$name`), so braces in CSS/JS need no escaping. Data goes
   into `<script id="data" type="application/json">`, `viz.js` and `report.css` are inlined.
   No network resources: the page must open from `file://`.

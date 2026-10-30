@@ -15,7 +15,7 @@ docker compose run --rm -T dev uv run pytest                   # tests
 docker compose run --rm -T dev uv run ruff check .             # lint
 docker compose run --rm -T dev uv run ruff format .            # format
 docker compose run --rm -T dev pre-commit run --all-files      # what the commit hook runs
-docker compose run --rm -T dev uv run python -m imigraph report   # output/brownian_vs_graph.html
+docker compose run --rm -T dev uv run python -m imigraph report   # new output/brownian_vs_graph_<time>.html + index.html
 docker compose run --rm -T dev uv run python -m imigraph compare  # print the comparison report
 docker compose run --rm -T dev bash -c 'cmd1 && cmd2'          # several commands in one container
 docker compose up web                                          # GUI at http://localhost:8000
