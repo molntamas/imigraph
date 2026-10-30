@@ -198,6 +198,18 @@ within the wall loss, momentum within its expected fluctuations) and that entrop
 monotonically to 95% of its maximum and then fluctuates around the plateau. Both systems show
 the same behaviour. Shown as section 5 of the report and section 4 of the GUI.
 
+## 7b2. Addendum (2026-10-30): the rule explained in the report, rule-level metrics
+
+Requested after the metrics review. Section 2 of the report (and of the GUI) now explains the
+graph system: ingredients (space graph, self-loops as walls, walker nodes), the rewrite rule
+with its matching and random choice, and what follows (invariants, `D = a^2 / (4 tau)`).
+An animated diagram shows one walker on a 5x5 space with every rule application in four
+phases (state, match, choose, rewrite), driven by the real rule with a fixed seed; a rules
+table is generated from `RandomHop.describe()`. Two rule-level metrics were added for both
+systems: the wall interaction rate (reflected steps / self-loop hops per step; 2.7% vs 2.4%
+once the cloud fills the box, the two wall discretisations) and the number of occupied lattice
+cells (both reach the uniform-occupancy value `cells^2 (1 - exp(-n / cells^2))` within 1%).
+
 ## 7c. Convention (2026-10-30, maintainer request): keep a history of result pages
 
 Every run of `python -m imigraph report [--label <change>]` writes a **new** file

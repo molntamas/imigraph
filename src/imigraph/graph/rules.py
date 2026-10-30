@@ -33,6 +33,24 @@ class RandomHop:
     :func:`~imigraph.graph.simulation.lattice_hop_diffusion`).
     """
 
+    name = "RandomHop"
+    rewrite = "{w,s}, {s,s'} -> {w,s'}, {s,s'}"
+    matches = "one match per edge {s,s'} at the anchor s of walker w; self-loops {s,s} included"
+    choice = "one match per walker, uniformly at random; all walkers rewritten at once"
+    invariants = "number of walkers, one anchoring edge per walker, the space graph"
+    physics = "random walk with step a per application: D = a^2 / (4 tau); self-loops reflect"
+
+    def describe(self) -> dict[str, str]:
+        """Human-readable description of the rule for reports and GUIs."""
+        return {
+            "name": self.name,
+            "rewrite": self.rewrite,
+            "matches": self.matches,
+            "choice": self.choice,
+            "invariants": self.invariants,
+            "physics": self.physics,
+        }
+
     def apply(self, state: WalkerGraph, rng: np.random.Generator) -> WalkerGraph:
         neighbors = state.space.neighbors
         choice = rng.integers(0, neighbors.shape[1], size=state.num_walkers)

@@ -125,7 +125,9 @@ class GraphSimulation:
             previous = state
             state = self.rule.apply(state, rng)
             if observer is not None:
-                observer(step, coordinates[previous.anchors], coordinates[state.anchors])
+                # A hop along a self-loop (walker stays) is the graph's wall interaction.
+                stayed = state.anchors == previous.anchors
+                observer(step, coordinates[previous.anchors], coordinates[state.anchors], stayed)
             if step % record_every == 0:
                 frames.append(state.anchors)
         times = self.step_time * record_every * np.arange(len(frames))

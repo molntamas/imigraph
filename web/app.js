@@ -56,6 +56,15 @@
     }, { slider: byId("pair-slider"), button: byId("pair-play"), label: byId("pair-label"),
          labelFor: timeLabel, interval: 100 }));
 
+    const rule = V.Viewport(byId("rule-canvas"), data.rule.space.box, 40);
+    players.push(V.Player((data.rule.times.length - 1) * 4, function (f) {
+      const step = Math.floor(f / 4), phase = f % 4;
+      rule.clear();
+      V.drawRuleStep(rule, data.rule.space, data.rule.anchors[step][0], data.rule.anchors[step + 1][0], phase);
+      byId("rule-phase").textContent = V.RULE_PHASES[phase];
+    }, { slider: byId("rule-slider"), button: byId("rule-play"), label: byId("rule-label"),
+         labelFor: function (f) { return "step " + Math.floor(f / 4) + "." + (f % 4); }, interval: 700 }));
+
     const demo = V.Viewport(byId("demo-canvas"), data.demo.space.box, 24);
     players.push(V.Player(data.demo.times.length, function (f) {
       demo.clear();
@@ -72,6 +81,9 @@
     byId("energy-chart").innerHTML = result.fragments.energy_chart;
     byId("momentum-chart").innerHTML = result.fragments.momentum_chart;
     byId("entropy-chart").innerHTML = result.fragments.entropy_chart;
+    byId("wall-rate-chart").innerHTML = result.fragments.wall_rate_chart;
+    byId("occupied-chart").innerHTML = result.fragments.occupied_chart;
+    byId("rules-table").innerHTML = result.fragments.rules_table;
     byId("markdown").textContent = result.markdown;
     byId("results").style.display = "block";
     players.forEach(function (p) { p.play(); });

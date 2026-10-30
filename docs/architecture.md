@@ -80,6 +80,14 @@ measured, for both systems alike:
 - **Occupancy entropy** `-sum p ln p` of a `bins x bins` histogram at every recorded frame
   (0 at the start, `ln(bins^2)` for a uniform occupancy; rises on average, fluctuates).
 
+Two rule-level metrics complete the picture:
+
+- **Wall interaction rate**: fraction of particles per step that were reflected (reference) or
+  hopped along a self-loop (graph). Zero until the cloud reaches the walls, then stationary;
+  the two systems discretise the wall differently, so the rates are similar but not identical.
+- **Occupied cells** of the lattice grid (a walker occupies the cell of its node): rises from 1
+  towards `cells^2 (1 - exp(-n / cells^2))` for a uniform occupancy, equally in both systems.
+
 Energy and momentum come from a `StepObserver` the simulators call after every fine step,
 then averaged per recording interval, because a particle that bounces off a wall between two
 recorded frames would otherwise look like it lost energy. Walls do cost a little: in the

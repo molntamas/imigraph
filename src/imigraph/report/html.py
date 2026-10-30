@@ -63,8 +63,43 @@ def _demo_blob(demo: GraphHistory) -> dict[str, Any]:
             "edges": space.edges().tolist(),
             "box": space.box.to_dict(),
             "spacing": float(space.cell_size[0]),
+            "neighbors": space.neighbors.tolist(),
         },
     }
+
+
+def default_rule_demo(spacing: float = 1.0, seed: int = 2, steps: int = 24) -> GraphHistory:
+    """One walker on a 5x5 lattice, recorded at every step, for the rule diagram."""
+    lattice = SquareLattice(5, spacing)
+    simulation = GraphSimulation(lattice, step_time=1.0)
+    initial = walkers_at_node(lattice, lattice.node_index(3, 2), 1)
+    return simulation.run(initial, steps, np.random.default_rng(seed))
+
+
+def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
+    """Human-readable descriptions of the rules of the experiment (see ``RandomHop.describe``)."""
+    rule = result.config.graph_system.rule
+    describe = getattr(rule, "describe", None)
+    if describe is None:
+        keys = ("rewrite", "matches", "choice", "invariants", "physics")
+        return [{"name": type(rule).__name__, **dict.fromkeys(keys, "")}]
+    return [describe()]
+
+
+def _rules_table(rules: list[dict[str, str]]) -> str:
+    rows = []
+    for rule in rules:
+        rows.append(
+            f"<tr><th>{escape(rule['name'])}</th><td><code>{escape(rule['rewrite'])}</code></td>"
+            f"<td>{escape(rule['matches'])}</td><td>{escape(rule['choice'])}</td>"
+            f"<td>{escape(rule['invariants'])}</td><td>{escape(rule['physics'])}</td></tr>"
+        )
+    return (
+        "<table><thead><tr><th>rule</th><th>rewrite</th><th>matches</th><th>choice</th>"
+        "<th>invariants</th><th>physics</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table>"
+    )
 
 
 def _msd_chart(report: ComparisonReport, config: ExperimentConfig) -> str:
@@ -179,7 +214,39 @@ def _metric_charts(result: ExperimentResult) -> dict[str, str]:
         xlabel="time",
         ylabel="entropy",
     )
-    return {"energy_chart": energy, "momentum_chart": momentum, "entropy_chart": entropy}
+    wall = svg.line_chart(
+        [
+            svg.Series(labels[0], t, ref.wall_rate, svg.REFERENCE_COLOR),
+            svg.Series(labels[1], t, cand.wall_rate, svg.CANDIDATE_COLOR),
+        ],
+        title="Wall interaction rate (fraction of particles per step: reflected / self-loop hop)",
+        xlabel="time",
+        ylabel="fraction per step",
+    )
+    size = result.config.lattice_size
+    occupied = svg.line_chart(
+        [
+            svg.Series(labels[0], ref.times, ref.occupied, svg.REFERENCE_COLOR),
+            svg.Series(labels[1], cand.times, cand.occupied, svg.CANDIDATE_COLOR),
+            svg.Series(
+                f"uniform occupancy, {ref.num_cells} (1 - exp(-n/{ref.num_cells}))",
+                ref.times,
+                np.full(ref.times.shape, ref.expected_occupied),
+                svg.THEORY_COLOR,
+                dashed=True,
+            ),
+        ],
+        title=f"Occupied cells of the {size}x{size} lattice grid",
+        xlabel="time",
+        ylabel="cells",
+    )
+    return {
+        "energy_chart": energy,
+        "momentum_chart": momentum,
+        "entropy_chart": entropy,
+        "wall_rate_chart": wall,
+        "occupied_chart": occupied,
+    }
 
 
 def _checks_table(report: ComparisonReport) -> str:
@@ -221,10 +288,16 @@ def _config_table(config: ExperimentConfig) -> str:
 
 
 def page_data(
-    result: ExperimentResult, demo: GraphHistory, max_particles: int = 300
+    result: ExperimentResult,
+    demo: GraphHistory,
+    max_particles: int = 300,
+    rule_demo: GraphHistory | None = None,
 ) -> dict[str, Any]:
     """The JSON-serialisable blob the animations are driven by (report page and browser GUI)."""
+    rule_demo = default_rule_demo() if rule_demo is None else rule_demo
     return {
+        "rule": _demo_blob(rule_demo),
+        "rules": rule_descriptions(result),
         "config": result.config.to_dict(),
         "reference": _trajectory_blob(result.reference, max_particles),
         "graph": _trajectory_blob(result.graph_history.project(), max_particles),
@@ -242,6 +315,7 @@ def fragments(result: ExperimentResult) -> dict[str, str]:
     report = result.report
     frames = report["marginals"].data["frames"]
     return {
+        "rules_table": _rules_table(rule_descriptions(result)),
         "checks_table": _checks_table(report),
         "msd_chart": _msd_chart(report, result.config),
         "marginal_early": _marginal_chart(result, int(frames[0])),

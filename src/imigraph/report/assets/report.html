@@ -40,7 +40,37 @@ fixed random point inside the node's cell (resolution a).</p>
 <div class="controls"><button id="reference-play">Play</button><input id="reference-slider" type="range"><span id="reference-label" class="label"></span></div>
 </div>
 
-<h2>2. Graph system: the graph, step by step</h2>
+<h2>2. The rule, explained</h2>
+<div class="card">
+<div class="row">
+<div>
+<p><strong>Ingredients.</strong> The <em>space</em> is a graph: lattice nodes (grey) joined by edges. A node at the
+boundary keeps a <em>self-loop</em> for every neighbour it lacks, so every node has exactly four edges; the self-loops
+are the walls. Each particle is a <em>walker node</em> (red), attached to the space by a single edge. The space never
+changes; the walker edges are the only things the rule rewrites.</p>
+<p><strong>The rule</strong> <code>{w,s}, {s,s'} &rarr; {w,s'}, {s,s'}</code>: find a walker edge {w,s} together with
+an edge {s,s'} at the same node s, and replace the walker edge by {w,s'}; the space edge stays. Every walker has four
+matches (one per edge at its node); one is chosen uniformly at random; all walkers are rewritten at the same time
+(synchronous update). A self-loop match {s,s} rewrites {w,s} into {w,s}: the walker stays where it is, which is how the
+wall reflects.</p>
+<p><strong>What follows from it.</strong> The number of walkers and the space are invariant. One application moves a
+walker by the lattice spacing a or by 0, so after k applications &lang;r&sup2;&rang; = k a&sup2;: a random walk with
+diffusion coefficient D = a&sup2; / (4&tau;), where &tau; is the duration of one application. That D is what the
+reference is run with. Many walkers on a large lattice then look like the Brownian cloud of section 4.</p>
+</div>
+<div>
+<p class="muted">One walker on a 5&times;5 space, each rule application shown in its four phases (state, match, choose,
+rewrite). The choices are those of the real rule with a fixed seed.</p>
+<canvas id="rule-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="rule-play">Play</button><input id="rule-slider" type="range"><span id="rule-label" class="label"></span></div>
+<p id="rule-phase" class="muted"></p>
+</div>
+</div>
+<h3>Rules in this experiment</h3>
+$rules_table
+</div>
+
+<h2>3. Graph system: the graph, step by step</h2>
 <div class="card">
 <p class="muted">A small instance ($demo_nodes space nodes, $demo_walkers walkers, one rule application per frame).
 Grey: space nodes and edges. Red: walker nodes and the edge that anchors each to the space; the rule rewrites exactly these edges.</p>
@@ -48,7 +78,7 @@ Grey: space nodes and edges. Red: walker nodes and the edge that anchors each to
 <div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
 </div>
 
-<h2>3. Graph system projected to 2D, next to the reference</h2>
+<h2>4. Graph system projected to 2D, next to the reference</h2>
 <div class="card">
 <p class="muted">Same recorded times, same $shown particles shown on both sides. Left: reference. Right: walkers on their node coordinates.</p>
 <div class="row">
@@ -58,7 +88,7 @@ Grey: space nodes and edges. Red: walker nodes and the edge that anchors each to
 <div class="controls"><button id="pair-play">Play</button><input id="pair-slider" type="range"><span id="pair-label" class="label"></span></div>
 </div>
 
-<h2>4. Comparison</h2>
+<h2>5. Comparison</h2>
 <div class="card">
 $checks_table
 <p class="muted">The MSD check compares the curves within their statistical uncertainty; the marginal check runs two-sample
@@ -79,18 +109,23 @@ $msd_chart
 <div class="row">$occupancy_charts</div>
 </div>
 
-<h2>5. Energy, momentum, entropy</h2>
+<h2>6. Energy, momentum, entropy, walls, spreading</h2>
 <div class="card">
 <p>Overdamped Brownian particles exchange energy and momentum with the bath, so neither is conserved particle by particle;
 what stays the same is the ensemble: the mean kinetic energy per particle (the temperature, 2D/dt per particle for free
 diffusion) and the total momentum (mean zero, fluctuating with the expected standard deviation). Both are measured from
 every simulation step, then averaged per recording interval, for both systems. The entropy is the Shannon entropy of the
 occupancy histogram: it rises from zero (everything at the centre) towards its maximum ln(bins) for a uniform occupancy,
-on average but not monotonically.</p>
+on average but not monotonically. Two rule-level metrics follow: the <em>wall interaction rate</em> (fraction of
+particles per step that were reflected, or that hopped along a self-loop) and the number of <em>occupied cells</em> of
+the lattice grid (a walker occupies the cell of its node), which rises from 1 towards the value for a uniform
+occupancy.</p>
 </div>
 <div class="card">$energy_chart</div>
 <div class="card">$momentum_chart</div>
 <div class="card">$entropy_chart</div>
+<div class="card">$wall_rate_chart</div>
+<div class="card">$occupied_chart</div>
 
 <p class="muted">Report of <code>imigraph.experiments.brownian_vs_graph</code>; regenerate with
 <code>docker compose run --rm dev python -m imigraph report</code>.</p>
@@ -113,6 +148,15 @@ $viz_js
     V.drawParticles(reference, data.reference.positions[f], V.COLORS.reference, 2.5);
   }, { slider: byId("reference-slider"), button: byId("reference-play"), label: byId("reference-label"),
         labelFor: timeLabel(data.reference.times), interval: 100 });
+
+  const rule = V.Viewport(byId("rule-canvas"), data.rule.space.box, 40);
+  V.Player((data.rule.times.length - 1) * 4, function (f) {
+    const step = Math.floor(f / 4), phase = f % 4;
+    rule.clear();
+    V.drawRuleStep(rule, data.rule.space, data.rule.anchors[step][0], data.rule.anchors[step + 1][0], phase);
+    byId("rule-phase").textContent = V.RULE_PHASES[phase];
+  }, { slider: byId("rule-slider"), button: byId("rule-play"), label: byId("rule-label"),
+        labelFor: function (f) { return "step " + Math.floor(f / 4) + "." + (f % 4); }, interval: 700 });
 
   const demo = V.Viewport(byId("demo-canvas"), data.demo.space.box, 24);
   V.Player(data.demo.times.length, function (f) {

@@ -49,25 +49,46 @@ WebAssembly). The first run downloads Pyodide, numpy and scipy (about 15 MB) and
 <div class="controls"><button id="pair-play">Play</button><input id="pair-slider" type="range"><span id="pair-label" class="label"></span></div>
 </div>
 
-<h2>2. The graph, step by step (small instance)</h2>
+<h2>2. The rule, explained</h2>
+<div class="card">
+<div class="row">
+<div>
+<p>The space is a lattice graph; boundary nodes keep self-loops for the neighbours they lack (the walls). Each particle is a
+walker node attached by one edge. The rule <code>{w,s}, {s,s'} &rarr; {w,s'}, {s,s'}</code> picks, for every walker at
+once, one of the four edges at its node uniformly at random and moves the walker edge along it; a self-loop means the
+walker stays. One application moves a walker by a or 0, so D = a&sup2; / (4&tau;).</p>
+<div id="rules-table"></div>
+</div>
+<div>
+<p class="muted">One walker on a 5&times;5 space; each application in four phases (state, match, choose, rewrite).</p>
+<canvas id="rule-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="rule-play">Play</button><input id="rule-slider" type="range"><span id="rule-label" class="label"></span></div>
+<p id="rule-phase" class="muted"></p>
+</div>
+</div>
+</div>
+
+<h2>3. The graph, step by step (small instance)</h2>
 <div class="card">
 <canvas id="demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
 </div>
 
-<h2>3. Comparison</h2>
+<h2>4. Comparison</h2>
 <div class="card" id="checks-table"></div>
 <div class="card" id="msd-chart"></div>
 <div class="card"><div class="row"><div id="marginal-early"></div><div id="marginal-final"></div></div></div>
 <div class="card"><div class="row" id="occupancy-charts"></div></div>
 
-<h2>4. Energy, momentum, entropy</h2>
+<h2>5. Energy, momentum, entropy, walls, spreading</h2>
 <div class="card"><p class="muted">Energy and momentum are measured from every simulation step and averaged per recording
 interval; the ensemble values stay the same (temperature 2D/dt, momentum zero within its expected fluctuation) in both
 systems. The occupancy entropy rises towards ln(bins), on average but not monotonically.</p></div>
 <div class="card" id="energy-chart"></div>
 <div class="card" id="momentum-chart"></div>
 <div class="card" id="entropy-chart"></div>
+<div class="card" id="wall-rate-chart"></div>
+<div class="card" id="occupied-chart"></div>
 <div class="card"><pre id="markdown"></pre></div>
 </div>
 </main>

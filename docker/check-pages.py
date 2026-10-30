@@ -55,7 +55,7 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
     print(f"report: {path}")
     errors = collect_errors(page)
     page.goto(path.resolve().as_uri(), wait_until="load")
-    for slider in ("reference-slider", "demo-slider", "pair-slider"):
+    for slider in ("reference-slider", "rule-slider", "demo-slider", "pair-slider"):
         frames = page.eval_on_selector(f"#{slider}", "e => Number(e.max) + 1")
         assert frames > 1, f"{slider} has {frames} frame(s)"
         print(f"  {slider}: {frames} frames")
@@ -63,7 +63,14 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
     page.wait_for_timeout(600)
     label = page.text_content("#pair-label") or ""
     assert label.startswith("t = "), f"unexpected pair label {label!r}"
-    for canvas in ("reference-canvas", "demo-canvas", "pair-reference-canvas", "pair-graph-canvas"):
+    page.click("#rule-slider")  # any frame of the rule diagram must have drawn something
+    for canvas in (
+        "reference-canvas",
+        "rule-canvas",
+        "demo-canvas",
+        "pair-reference-canvas",
+        "pair-graph-canvas",
+    ):
         painted = page.evaluate(NONBLANK_PIXELS_JS, canvas)
         assert painted > 500, f"{canvas} looks blank ({painted} painted pixels)"
         print(f"  {canvas}: {painted} painted pixels")

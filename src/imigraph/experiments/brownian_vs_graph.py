@@ -106,6 +106,7 @@ def metrics_of(config: ExperimentConfig, trajectory: Trajectory, observer: StepO
         record_every=config.record_every,
         diffusion=config.diffusion,
         bins=config.entropy_bins,
+        cells=config.lattice_size,
     )
 
 

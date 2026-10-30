@@ -21,7 +21,11 @@ def test_run_json_round_trip():
         "energy_chart",
         "momentum_chart",
         "entropy_chart",
+        "wall_rate_chart",
+        "occupied_chart",
+        "rules_table",
     }
+    assert payload["data"]["rules"][0]["name"] == "RandomHop"
     assert "entropy" in payload["data"]["metrics"]["graph"]
     assert payload["fragments"]["msd_chart"].startswith("<svg")
     assert "| msd |" in payload["markdown"]

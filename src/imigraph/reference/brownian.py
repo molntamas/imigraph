@@ -83,9 +83,10 @@ class BrownianBox:
         x = initial
         for step in range(1, steps + 1):
             previous = x
-            x = reflect_into_box(x + self.step_scale * rng.standard_normal(x.shape), self.box)
+            proposed = x + self.step_scale * rng.standard_normal(x.shape)
+            x = reflect_into_box(proposed, self.box)
             if observer is not None:
-                observer(step, previous, x)
+                observer(step, previous, x, wall_hits=~self.box.contains(proposed))
             if step % record_every == 0:
                 frames.append(x)
         times = self.dt * record_every * np.arange(len(frames))

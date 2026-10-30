@@ -38,13 +38,23 @@ class StepObserver:
     def __init__(self) -> None:
         self.mean_squared: list[float] = []
         self.summed: list[np.ndarray] = []
+        self.wall_fraction: list[float] = []
         self.num_particles: int | None = None
 
-    def __call__(self, step: int, previous: np.ndarray, current: np.ndarray) -> None:
+    def __call__(
+        self,
+        step: int,
+        previous: np.ndarray,
+        current: np.ndarray,
+        wall_hits: np.ndarray | None = None,
+    ) -> None:
+        """``wall_hits`` is a boolean mask of the particles that interacted with a wall in this
+        step (a reflected Brownian step, a self-loop hop on the graph)."""
         delta = current - previous
         self.num_particles = int(delta.shape[0])
         self.mean_squared.append(float(np.mean(np.sum(delta**2, axis=1))))
         self.summed.append(delta.sum(axis=0))
+        self.wall_fraction.append(0.0 if wall_hits is None else float(np.mean(wall_hits)))
 
     @property
     def steps(self) -> int:
@@ -59,6 +69,32 @@ class StepObserver:
         if not self.summed:
             return np.zeros((0, 2))
         return mass * np.stack(self.summed) / dt
+
+
+def occupied_cells(trajectory: Trajectory, cells: int) -> np.ndarray:
+    """Number of occupied cells of a ``cells x cells`` grid over the box, at every frame.
+
+    With the grid of the lattice (``cells`` = lattice size) a graph walker occupies exactly the
+    cell of its node, so both systems are counted the same way. For ``n`` particles spread
+    uniformly over ``cells^2`` cells the expectation is ``cells^2 (1 - exp(-n / cells^2))``.
+    """
+    box = trajectory.box
+    extent = [[box.lower[0], box.upper[0]], [box.lower[1], box.upper[1]]]
+    occupied = np.empty(trajectory.num_frames, dtype=int)
+    for frame in range(trajectory.num_frames):
+        counts, _, _ = np.histogram2d(
+            trajectory.positions[frame, :, 0],
+            trajectory.positions[frame, :, 1],
+            bins=cells,
+            range=extent,
+        )
+        occupied[frame] = int(np.count_nonzero(counts))
+    return occupied
+
+
+def expected_occupied_cells(particles: int, cells: int) -> float:
+    """Expected occupied cells for a uniform occupancy (see :func:`occupied_cells`)."""
+    return float(cells**2 * (1 - np.exp(-particles / cells**2)))
 
 
 def occupancy_entropy(trajectory: Trajectory, bins: int = 8) -> np.ndarray:
@@ -103,9 +139,13 @@ class Metrics:
     energy: np.ndarray
     momentum: np.ndarray
     entropy: np.ndarray
+    wall_rate: np.ndarray
+    occupied: np.ndarray
     expected_energy: float
     momentum_std: float
     max_entropy: float
+    num_cells: int
+    expected_occupied: float
     extra: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
     @property
@@ -118,9 +158,13 @@ class Metrics:
             "energy": self.energy.tolist(),
             "momentum": self.momentum.tolist(),
             "entropy": self.entropy.tolist(),
+            "wall_rate": self.wall_rate.tolist(),
+            "occupied": self.occupied.tolist(),
             "expected_energy": self.expected_energy,
             "momentum_std": self.momentum_std,
             "max_entropy": self.max_entropy,
+            "num_cells": self.num_cells,
+            "expected_occupied": self.expected_occupied,
         }
 
 
@@ -132,12 +176,14 @@ def compute_metrics(
     diffusion: float,
     bins: int = 8,
     mass: float = 1.0,
+    cells: int = 41,
 ) -> Metrics:
     """Combine a recorded trajectory and the step observer of the same run into :class:`Metrics`.
 
     ``expected_energy`` and ``momentum_std`` are the free-diffusion values for the given
     ``diffusion``; ``momentum_std`` refers to the interval mean of the momentum, which averages
-    ``record_every`` independent steps.
+    ``record_every`` independent steps. ``cells`` is the grid for :func:`occupied_cells`
+    (the lattice size, so that graph nodes and cells coincide).
     """
     if observer.steps != (trajectory.num_frames - 1) * record_every:
         raise ValueError(
@@ -150,7 +196,11 @@ def compute_metrics(
         energy=aggregate_per_interval(observer.kinetic_energy(dt, mass), record_every),
         momentum=aggregate_per_interval(observer.momentum(dt, mass), record_every),
         entropy=occupancy_entropy(trajectory, bins),
+        wall_rate=aggregate_per_interval(np.asarray(observer.wall_fraction), record_every),
+        occupied=occupied_cells(trajectory, cells),
         expected_energy=2 * mass * diffusion / dt,
         momentum_std=float(np.sqrt(2 * n * mass**2 * diffusion / dt) / np.sqrt(record_every)),
         max_entropy=float(np.log(bins * bins)),
+        num_cells=cells * cells,
+        expected_occupied=expected_occupied_cells(n, cells),
     )

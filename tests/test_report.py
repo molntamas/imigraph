@@ -26,6 +26,7 @@ def test_page_is_self_contained_and_has_every_section(page):
     assert page.startswith("<!DOCTYPE html>")
     for element_id in (
         "reference-canvas",
+        "rule-canvas",
         "demo-canvas",
         "pair-reference-canvas",
         "pair-graph-canvas",
@@ -44,6 +45,13 @@ def test_embedded_data_matches_the_experiment(page):
     assert len(data["demo"]["anchors"]) == 11 and len(data["demo"]["anchors"][0]) == 3
     assert data["report"]["checks"][0]["name"] == "msd"
     assert data["config"]["seed"] == 3
+    assert data["rules"][0]["name"] == "RandomHop"
+    assert len(data["rule"]["space"]["neighbors"]) == 25 and len(data["rule"]["anchors"]) == 25
+    assert "The rule, explained" in page
+    assert (
+        "<th>RandomHop</th><td><code>{w,s}, {s,s&#x27;} -&gt; {w,s&#x27;}, {s,s&#x27;}</code>"
+        in page
+    )
 
 
 def test_every_run_writes_a_new_file_and_keeps_the_old_ones(tmp_path):
