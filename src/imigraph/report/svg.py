@@ -13,6 +13,8 @@ CANDIDATE_COLOR = "#dc2626"
 THEORY_COLOR = "#6b7280"
 AXIS_COLOR = "#374151"
 GRID_COLOR = "#e5e7eb"
+LEGEND_ROWS = 2
+LEGEND_ROW_HEIGHT = 18
 
 
 def _nice_ticks(low: float, high: float, count: int = 5) -> list[float]:
@@ -62,7 +64,7 @@ class Axes:
     left: int = 60
     right: int = 16
     top: int = 32
-    bottom: int = 44
+    bottom: int = 44 + 2 * 18  # axis label plus LEGEND_ROWS legend rows
 
     def px(self, x: float) -> float:
         lo, hi = self.x_range
@@ -107,7 +109,8 @@ class Axes:
             f'height="{self.height - self.top - self.bottom}" fill="none" stroke="{AXIS_COLOR}"/>'
         )
         parts.append(
-            f'<text x="{(self.left + self.width - self.right) / 2:.1f}" y="{self.height - 8}" '
+            f'<text x="{(self.left + self.width - self.right) / 2:.1f}" '
+            f'y="{self.height - LEGEND_ROWS * LEGEND_ROW_HEIGHT - 8}" '
             f'font-size="12" text-anchor="middle" fill="{AXIS_COLOR}">{escape(xlabel)}</text>'
         )
         parts.append(
@@ -118,9 +121,13 @@ class Axes:
         return parts
 
     def legend(self, entries: list[tuple[str, str, bool]]) -> list[str]:
+        """Legend rows below the x-axis label (inside the ``LEGEND_ROWS`` extra bottom margin)."""
         parts = []
-        x, y = self.left + 10, self.top + 14
+        x, y = self.left, self.height - LEGEND_ROWS * LEGEND_ROW_HEIGHT + 8
         for label, color, dashed in entries:
+            width = 34 + 7 * len(label)
+            if x + width > self.width - self.right and x > self.left:
+                x, y = self.left, y + LEGEND_ROW_HEIGHT
             dash = ' stroke-dasharray="6 4"' if dashed else ""
             parts.append(
                 f'<line x1="{x}" y1="{y}" x2="{x + 22}" y2="{y}" stroke="{color}" '
@@ -130,7 +137,7 @@ class Axes:
                 f'<text x="{x + 28}" y="{y + 4}" font-size="12" fill="{AXIS_COLOR}">'
                 f"{escape(label)}</text>"
             )
-            y += 18
+            x += width
         return parts
 
 
@@ -148,12 +155,27 @@ def line_chart(
     xlabel: str = "",
     ylabel: str = "",
     width: int = 640,
-    height: int = 360,
+    height: int = 396,
+    zero_based: bool = True,
 ) -> str:
+    """Line chart; with ``zero_based`` the y-axis includes 0, otherwise it fits the data."""
     xs = np.concatenate([np.asarray(s.x, dtype=float) for s in series])
-    ys = np.concatenate([np.asarray(s.y, dtype=float) for s in series])
-    y_high = float(np.nanmax(ys)) if ys.size else 1.0
-    axes = Axes(width, height, (float(xs.min()), float(xs.max())), (0.0, y_high * 1.05 or 1.0))
+    ys = np.concatenate(
+        [np.asarray(s.y, dtype=float) for s in series]
+        + [np.asarray(b, dtype=float) for s in series if s.band is not None for b in s.band]
+    )
+    y_high = max(float(np.nanmax(ys)), 0.0) if ys.size else 1.0
+    y_low = min(float(np.nanmin(ys)), 0.0) if ys.size else 0.0
+    if y_high == y_low:
+        y_high = y_low + 1.0
+    margin = 0.05 * (y_high - y_low)
+    if zero_based:
+        y_range = (y_low - margin if y_low < 0 else 0.0, y_high + margin)
+    else:
+        y_low = float(np.nanmin(ys))
+        margin = 0.1 * (y_high - y_low) or 0.1 * abs(y_high) or 1.0
+        y_range = (y_low - margin, y_high + margin)
+    axes = Axes(width, height, (float(xs.min()), float(xs.max())), y_range)
     parts = axes.frame(title, xlabel, ylabel)
     for s in series:
         if s.band is not None:
@@ -184,7 +206,7 @@ def histogram_chart(
     xlabel: str = "",
     ylabel: str = "count",
     width: int = 640,
-    height: int = 300,
+    height: int = 336,
 ) -> str:
     """Overlaid step histograms with shared ``edges``; ``counts`` holds (label, counts, color)."""
     edges = np.asarray(edges, dtype=float)

@@ -109,7 +109,7 @@ def _marginal_chart(result: ExperimentResult, frame: int) -> str:
         title=f"x marginal at t = {result.reference.times[frame]:.4g}",
         xlabel="x",
         width=520,
-        height=280,
+        height=316,
     )
 
 
@@ -125,6 +125,59 @@ def _occupancy_charts(report: ComparisonReport) -> str:
             f"{svg.heatmap(data[key], color)}</div>"
         )
     return "\n".join(blocks)
+
+
+def _metric_charts(result: ExperimentResult) -> dict[str, str]:
+    ref, cand = result.reference_metrics, result.graph_metrics
+    labels = (result.report.reference_label, result.report.candidate_label)
+    t = ref.interval_times
+    energy = svg.line_chart(
+        [
+            svg.Series(labels[0], t, ref.energy, svg.REFERENCE_COLOR),
+            svg.Series(labels[1], t, cand.energy, svg.CANDIDATE_COLOR),
+            svg.Series(
+                "free diffusion 2 D / dt",
+                t,
+                np.full(t.shape, ref.expected_energy),
+                svg.THEORY_COLOR,
+                dashed=True,
+            ),
+        ],
+        title="Mean kinetic energy per particle (interval means of the simulation steps)",
+        xlabel="time",
+        ylabel="energy",
+        zero_based=False,
+    )
+    band = (np.full(t.shape, -2 * ref.momentum_std), np.full(t.shape, 2 * ref.momentum_std))
+    momentum = svg.line_chart(
+        [
+            svg.Series(f"{labels[0]}, x", t, ref.momentum[:, 0], svg.REFERENCE_COLOR, band=band),
+            svg.Series(f"{labels[0]}, y", t, ref.momentum[:, 1], svg.REFERENCE_COLOR, dashed=True),
+            svg.Series(f"{labels[1]}, x", t, cand.momentum[:, 0], svg.CANDIDATE_COLOR),
+            svg.Series(f"{labels[1]}, y", t, cand.momentum[:, 1], svg.CANDIDATE_COLOR, dashed=True),
+        ],
+        title="Total momentum (interval means; band: +/- 2 standard deviations expected)",
+        xlabel="time",
+        ylabel="momentum",
+    )
+    bins = result.config.entropy_bins
+    entropy = svg.line_chart(
+        [
+            svg.Series(labels[0], ref.times, ref.entropy, svg.REFERENCE_COLOR),
+            svg.Series(labels[1], cand.times, cand.entropy, svg.CANDIDATE_COLOR),
+            svg.Series(
+                f"uniform, ln({bins}x{bins})",
+                ref.times,
+                np.full(ref.times.shape, ref.max_entropy),
+                svg.THEORY_COLOR,
+                dashed=True,
+            ),
+        ],
+        title=f"Occupancy entropy on a {bins}x{bins} grid (nats)",
+        xlabel="time",
+        ylabel="entropy",
+    )
+    return {"energy_chart": energy, "momentum_chart": momentum, "entropy_chart": entropy}
 
 
 def _checks_table(report: ComparisonReport) -> str:
@@ -175,6 +228,10 @@ def page_data(
         "graph": _trajectory_blob(result.graph_history.project(), max_particles),
         "demo": _demo_blob(demo),
         "report": result.report.to_dict(),
+        "metrics": {
+            "reference": result.reference_metrics.to_dict(),
+            "graph": result.graph_metrics.to_dict(),
+        },
     }
 
 
@@ -188,6 +245,7 @@ def fragments(result: ExperimentResult) -> dict[str, str]:
         "marginal_early": _marginal_chart(result, int(frames[0])),
         "marginal_final": _marginal_chart(result, int(frames[-1])),
         "occupancy_charts": _occupancy_charts(report),
+        **_metric_charts(result),
     }
 
 

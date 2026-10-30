@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from imigraph.metrics import StepObserver
 from imigraph.trajectory import Box, Trajectory
 
 
@@ -62,11 +63,13 @@ class BrownianBox:
         steps: int,
         rng: np.random.Generator,
         record_every: int = 1,
+        observer: StepObserver | None = None,
     ) -> Trajectory:
         """Run ``steps`` time steps from ``initial`` (shape ``(n, 2)``).
 
         Every ``record_every``-th state is recorded, frame 0 is the initial condition, so the
-        trajectory has ``steps // record_every + 1`` frames.
+        trajectory has ``steps // record_every + 1`` frames. ``observer(step, previous, x)`` is
+        called after every step (see :mod:`imigraph.metrics`).
         """
         initial = np.asarray(initial, dtype=float)
         if initial.ndim != 2 or initial.shape[1] != 2:
@@ -79,7 +82,10 @@ class BrownianBox:
         frames = [initial]
         x = initial
         for step in range(1, steps + 1):
+            previous = x
             x = reflect_into_box(x + self.step_scale * rng.standard_normal(x.shape), self.box)
+            if observer is not None:
+                observer(step, previous, x)
             if step % record_every == 0:
                 frames.append(x)
         times = self.dt * record_every * np.arange(len(frames))

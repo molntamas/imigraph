@@ -187,6 +187,17 @@ Deviations from the plan above, and findings:
   attribution kept) as `.claude/skills/grilling/`; the rest can be added with
   `npx skills@latest add mattpocock/skills --skill=wayfinder` run inside the container.
 
+## 7b. Addendum (2026-10-30, after review): energy, momentum, entropy
+
+Requested after the first review. `imigraph.metrics` measures the mean kinetic energy per
+particle and the total momentum from every simulation step (a `StepObserver` hook in both
+simulators) and the Shannon entropy of the occupancy histogram per recorded frame. Physics
+note: for overdamped Brownian motion these are stationary ensemble quantities, not conserved
+per particle; the tests assert stationarity (no trend between halves, agreement with `2D/dt`
+within the wall loss, momentum within its expected fluctuations) and that entropy rises
+monotonically to 95% of its maximum and then fluctuates around the plateau. Both systems show
+the same behaviour. Shown as section 5 of the report and section 4 of the GUI.
+
 ## 8. Follow-ups
 
 1. Fix the sandcastle hook problem: in `.sandcastle/config.mts` set `core.hooksPath` to

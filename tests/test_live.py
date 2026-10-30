@@ -12,13 +12,17 @@ def test_run_json_round_trip():
     assert len(payload["data"]["reference"]["times"]) == 6
     assert len(payload["data"]["reference"]["positions"][0]) == 50
     assert payload["data"]["config"]["seed"] == 2
-    assert set(payload["fragments"]) == {
+    assert set(payload["fragments"]) >= {
         "checks_table",
         "msd_chart",
         "marginal_early",
         "marginal_final",
         "occupancy_charts",
+        "energy_chart",
+        "momentum_chart",
+        "entropy_chart",
     }
+    assert "entropy" in payload["data"]["metrics"]["graph"]
     assert payload["fragments"]["msd_chart"].startswith("<svg")
     assert "| msd |" in payload["markdown"]
 

@@ -9,6 +9,7 @@ import numpy as np
 from imigraph.graph.rules import RandomHop, Rule
 from imigraph.graph.space import Space
 from imigraph.graph.state import WalkerGraph
+from imigraph.metrics import StepObserver
 from imigraph.trajectory import Trajectory
 
 
@@ -106,16 +107,25 @@ class GraphSimulation:
         steps: int,
         rng: np.random.Generator,
         record_every: int = 1,
+        observer: StepObserver | None = None,
     ) -> GraphHistory:
-        """Apply the rule ``steps`` times, recording every ``record_every``-th state."""
+        """Apply the rule ``steps`` times, recording every ``record_every``-th state.
+
+        ``observer(step, previous_positions, positions)`` is called after every step with the
+        projected positions (see :mod:`imigraph.metrics`).
+        """
         if initial.space != self.space:
             raise ValueError("initial state must live on the simulation's space")
         if steps < 0 or record_every < 1:
             raise ValueError("steps must be >= 0 and record_every >= 1")
         frames = [initial.anchors]
         state = initial
+        coordinates = self.space.coordinates
         for step in range(1, steps + 1):
+            previous = state
             state = self.rule.apply(state, rng)
+            if observer is not None:
+                observer(step, coordinates[previous.anchors], coordinates[state.anchors])
             if step % record_every == 0:
                 frames.append(state.anchors)
         times = self.step_time * record_every * np.arange(len(frames))

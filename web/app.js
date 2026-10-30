@@ -69,6 +69,9 @@
     byId("marginal-early").innerHTML = result.fragments.marginal_early;
     byId("marginal-final").innerHTML = result.fragments.marginal_final;
     byId("occupancy-charts").innerHTML = result.fragments.occupancy_charts;
+    byId("energy-chart").innerHTML = result.fragments.energy_chart;
+    byId("momentum-chart").innerHTML = result.fragments.momentum_chart;
+    byId("entropy-chart").innerHTML = result.fragments.entropy_chart;
     byId("markdown").textContent = result.markdown;
     byId("results").style.display = "block";
     players.forEach(function (p) { p.play(); });

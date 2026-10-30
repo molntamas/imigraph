@@ -67,6 +67,25 @@ docs/, plans/              requirements, methods, plans
   then claims to imitate the reference at resolution `a`. Displacements, and therefore the MSD,
   do not depend on the offset.
 
+## Metrics: energy, momentum, entropy (`imigraph.metrics`)
+
+Overdamped Brownian particles exchange energy and momentum with the bath, so neither is
+conserved particle by particle; the *ensemble* values are stationary and that is what is
+measured, for both systems alike:
+
+- **Kinetic energy per particle** `m |dr|^2 / (2 dt^2)` averaged over particles at every
+  simulation step (free value `2 m D / dt`, the temperature of the bath in these units).
+- **Total momentum** `m sum(dr) / dt` at every step (mean zero, standard deviation
+  `sqrt(2 n m^2 D / dt)` per component).
+- **Occupancy entropy** `-sum p ln p` of a `bins x bins` histogram at every recorded frame
+  (0 at the start, `ln(bins^2)` for a uniform occupancy; rises on average, fluctuates).
+
+Energy and momentum come from a `StepObserver` the simulators call after every fine step,
+then averaged per recording interval, because a particle that bounces off a wall between two
+recorded frames would otherwise look like it lost energy. Walls do cost a little: in the
+default experiment both systems sit about 2% below the free value, stationary, and agree with
+each other within 1%. `tests/test_metrics.py` pins these statements.
+
 ## Extending
 
 - **New space**: implement the `Space` protocol (`coordinates`, `neighbors`, `box`,

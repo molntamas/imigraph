@@ -16,6 +16,7 @@ import numpy as np
 from imigraph.compare import ComparisonReport, compare
 from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers_at_node
 from imigraph.graph.simulation import lattice_hop_diffusion
+from imigraph.metrics import Metrics, StepObserver, compute_metrics
 from imigraph.reference import BrownianBox
 from imigraph.trajectory import Trajectory
 
@@ -31,12 +32,15 @@ class ExperimentConfig:
     steps: int = 3000
     record_every: int = 50
     seed: int = 0
+    entropy_bins: int = 8
 
     def __post_init__(self) -> None:
         if self.steps % self.record_every:
             raise ValueError("steps must be a multiple of record_every")
         if self.particles < 2:
             raise ValueError("at least two particles are needed for the statistics")
+        if self.entropy_bins < 1:
+            raise ValueError("entropy_bins must be >= 1")
 
     @property
     def diffusion(self) -> float:
@@ -70,22 +74,39 @@ class ExperimentResult:
     graph_history: GraphHistory
     graph_projection: Trajectory
     report: ComparisonReport
+    reference_metrics: Metrics
+    graph_metrics: Metrics
 
     @property
     def passed(self) -> bool:
         return self.report.passed
 
 
-def run_reference(config: ExperimentConfig, rng: np.random.Generator) -> Trajectory:
+def run_reference(
+    config: ExperimentConfig, rng: np.random.Generator, observer: StepObserver | None = None
+) -> Trajectory:
     system = config.reference_system
     initial = system.all_at(config.lattice.box.center, config.particles)
-    return system.simulate(initial, config.steps, rng, config.record_every)
+    return system.simulate(initial, config.steps, rng, config.record_every, observer)
 
 
-def run_graph(config: ExperimentConfig, rng: np.random.Generator) -> GraphHistory:
+def run_graph(
+    config: ExperimentConfig, rng: np.random.Generator, observer: StepObserver | None = None
+) -> GraphHistory:
     lattice = config.lattice
     initial = walkers_at_node(lattice, lattice.center_node, config.particles)
-    return config.graph_system.run(initial, config.steps, rng, config.record_every)
+    return config.graph_system.run(initial, config.steps, rng, config.record_every, observer)
+
+
+def metrics_of(config: ExperimentConfig, trajectory: Trajectory, observer: StepObserver) -> Metrics:
+    return compute_metrics(
+        trajectory,
+        observer,
+        dt=config.step_time,
+        record_every=config.record_every,
+        diffusion=config.diffusion,
+        bins=config.entropy_bins,
+    )
 
 
 def run_experiment(config: ExperimentConfig | None = None) -> ExperimentResult:
@@ -96,8 +117,9 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentResult:
     """
     config = ExperimentConfig() if config is None else config
     reference_rng, graph_rng, cell_rng = np.random.default_rng(config.seed).spawn(3)
-    reference = run_reference(config, reference_rng)
-    history = run_graph(config, graph_rng)
+    reference_observer, graph_observer = StepObserver(), StepObserver()
+    reference = run_reference(config, reference_rng, reference_observer)
+    history = run_graph(config, graph_rng, graph_observer)
     projection = history.project(cell_rng=cell_rng)
     report = compare(
         reference,
@@ -105,4 +127,12 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentResult:
         reference_label="Brownian motion in a box",
         candidate_label="random hops on a lattice graph",
     )
-    return ExperimentResult(config, reference, history, projection, report)
+    return ExperimentResult(
+        config,
+        reference,
+        history,
+        projection,
+        report,
+        reference_metrics=metrics_of(config, reference, reference_observer),
+        graph_metrics=metrics_of(config, history.project(), graph_observer),
+    )

@@ -79,6 +79,19 @@ $msd_chart
 <div class="row">$occupancy_charts</div>
 </div>
 
+<h2>5. Energy, momentum, entropy</h2>
+<div class="card">
+<p>Overdamped Brownian particles exchange energy and momentum with the bath, so neither is conserved particle by particle;
+what stays the same is the ensemble: the mean kinetic energy per particle (the temperature, 2D/dt per particle for free
+diffusion) and the total momentum (mean zero, fluctuating with the expected standard deviation). Both are measured from
+every simulation step, then averaged per recording interval, for both systems. The entropy is the Shannon entropy of the
+occupancy histogram: it rises from zero (everything at the centre) towards its maximum ln(bins) for a uniform occupancy,
+on average but not monotonically.</p>
+</div>
+<div class="card">$energy_chart</div>
+<div class="card">$momentum_chart</div>
+<div class="card">$entropy_chart</div>
+
 <p class="muted">Report of <code>imigraph.experiments.brownian_vs_graph</code>; regenerate with
 <code>docker compose run --rm dev python -m imigraph report</code>.</p>
 </main>
