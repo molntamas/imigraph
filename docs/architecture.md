@@ -94,6 +94,18 @@ recorded frames would otherwise look like it lost energy. Walls do cost a little
 default experiment both systems sit about 2% below the free value, stationary, and agree with
 each other within 1%. `tests/test_metrics.py` pins these statements.
 
+## Second reference system: the hard-disk gas (`imigraph.reference.gas`)
+
+Energy-conserving particle motion: disks in straight lines, elastic collisions (velocity
+components along the line of centres exchanged, which conserves momentum and kinetic energy
+exactly), specular or periodic walls, fixed time step (a collision is resolved at the first
+step in which two disks overlap). `imigraph.experiments.gas` runs a free expansion from the left
+half of the box and checks against kinetic theory: energy constant to rounding, momentum
+constant (periodic) or bounded (specular walls), final speeds Maxwell-Boltzmann (Rayleigh with
+`sigma^2 = E / (n m)`), occupancy entropy rising to the uniform value. Page:
+`python -m imigraph gas-report`. No graph imitation yet: the natural candidate is a lattice gas
+(HPP/FHP-style rules), which conserves mass, momentum and energy exactly by construction.
+
 ## Extending
 
 - **New space**: implement the `Space` protocol (`coordinates`, `neighbors`, `box`,

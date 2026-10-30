@@ -210,6 +210,18 @@ systems: the wall interaction rate (reflected steps / self-loop hops per step; 2
 once the cloud fills the box, the two wall discretisations) and the number of occupied lattice
 cells (both reach the uniform-occupancy value `cells^2 (1 - exp(-n / cells^2))` within 1%).
 
+## 7b3. Addendum (2026-10-30): an energy-conserving reference, the hard-disk gas
+
+Requested after the rules review ("an energy conserving particle movement simulation, much
+smaller is fine, no graph for now"). `imigraph.reference.gas.HardDiskGas`: elastic disk
+collisions and specular (or periodic) walls, fixed time step; kinetic energy is conserved to
+rounding (5.6e-16 relative in the default run), momentum exactly with periodic walls.
+`imigraph.experiments.gas` runs a free expansion of 120 disks from the left half of the box
+(1.8 s) and checks energy, momentum, the Maxwell-Boltzmann speed law (KS p = 0.31 at the end
+against a Rayleigh law with sigma from the conserved energy) and the entropy rise; page via
+`python -m imigraph gas-report`. Next graph step for it: a lattice-gas rule (HPP/FHP) that
+conserves mass, momentum and energy by construction, compared with the same checks.
+
 ## 7c. Convention (2026-10-30, maintainer request): keep a history of result pages
 
 Every run of `python -m imigraph report [--label <change>]` writes a **new** file

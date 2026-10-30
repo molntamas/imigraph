@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>imigraph: hard-disk gas</title>
+<style>
+$css
+</style>
+</head>
+<body>
+<main>
+<h1>imigraph: a hard-disk gas that conserves energy</h1>
+<p class="muted">Generated $generated. Reference system for energy-conserving motion; no graph imitation yet.
+Verdict of the checks against kinetic theory: <span class="badge $verdict">$verdict_upper</span></p>
+
+<div class="card">
+<h3>Parameters</h3>
+<div class="row">
+<div>$config_table</div>
+<div>
+<p><strong>The model.</strong> $particles disks move in straight lines. When two disks overlap while approaching
+each other, the velocity components along the line of centres are exchanged (an elastic collision of equal masses),
+which conserves momentum and kinetic energy exactly; the overlap is then removed. Walls are specular: the velocity
+component normal to the wall flips, so every disk keeps its speed. Positions advance with a fixed time step, so a
+collision happens at the first step in which two disks overlap, which shifts it by at most one step and never changes
+the energy.</p>
+<p><strong>The experiment.</strong> All disks start on a grid in the left half of the box with the same speed in
+random directions, a state far from equilibrium. The gas expands into the empty half (entropy rises), disks collide
+($collisions collisions in this run) and the speeds relax to the two-dimensional Maxwell&ndash;Boltzmann law, whose only
+parameter follows from the conserved energy: &sigma;&sup2; = E / (n m).</p>
+</div>
+</div>
+</div>
+
+<h2>1. The gas</h2>
+<div class="card">
+<canvas id="gas-canvas" width="560" height="560"></canvas>
+<div class="controls"><button id="gas-play">Play</button><input id="gas-slider" type="range"><span id="gas-label" class="label"></span></div>
+</div>
+
+<h2>2. Checks against kinetic theory</h2>
+<div class="card">
+$checks_table
+</div>
+
+<h2>3. Energy, momentum, entropy, collisions, speeds</h2>
+<div class="card">$energy_chart</div>
+<div class="card">$momentum_chart</div>
+<div class="card">$entropy_chart</div>
+<div class="card">$collisions_chart</div>
+<div class="card">$speed_chart</div>
+
+<p class="muted">Page of <code>imigraph.experiments.gas</code>; regenerate with
+<code>docker compose run --rm dev uv run python -m imigraph gas-report --label &lt;change&gt;</code>.</p>
+</main>
+
+<script id="data" type="application/json">$data_json</script>
+<script>
+$viz_js
+</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const V = window.imigraphViz;
+  const byId = function (id) { return document.getElementById(id); };
+  const gas = V.Viewport(byId("gas-canvas"), data.trajectory.box);
+  V.Player(data.trajectory.times.length, function (f) {
+    gas.clear();
+    V.drawParticles(gas, data.trajectory.positions[f], V.COLORS.reference, data.radius * gas.scale);
+  }, { slider: byId("gas-slider"), button: byId("gas-play"), label: byId("gas-label"),
+        labelFor: function (f) { return "t = " + data.trajectory.times[f].toFixed(2); }, interval: 60 });
+})();
+</script>
+</body>
+</html>

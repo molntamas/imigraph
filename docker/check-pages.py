@@ -85,6 +85,40 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
     assert page.locator("table tbody tr").count() >= 3, "check table has fewer than 3 rows"
     assert page.locator("svg").count() >= 4, "fewer than 4 SVG plots"
     page.screenshot(path=str(out / "report.png"), full_page=True)
+    check_phone_layout(page, out / "report-phone.png")
+    return errors
+
+
+def check_phone_layout(page: Page, screenshot: Path) -> None:
+    """At phone width the page must not scroll sideways; saves a screenshot of the top."""
+    page.set_viewport_size({"width": 390, "height": 844})
+    page.wait_for_timeout(300)
+    scroll_width, inner_width = page.evaluate(
+        "() => [document.documentElement.scrollWidth, window.innerWidth]"
+    )
+    assert scroll_width <= inner_width + 1, (
+        f"page overflows sideways at phone width: {scroll_width}px > {inner_width}px"
+    )
+    page.screenshot(path=str(screenshot), full_page=False)
+    print(f"  phone width ok ({scroll_width}px <= {inner_width}px)")
+    page.set_viewport_size({"width": 1200, "height": 900})
+
+
+def check_gas_report(page: Page, path: Path, out: Path) -> list[str]:
+    print(f"gas report: {path}")
+    errors = collect_errors(page)
+    page.goto(path.resolve().as_uri(), wait_until="load")
+    frames = page.eval_on_selector("#gas-slider", "e => Number(e.max) + 1")
+    assert frames > 1, f"gas-slider has {frames} frame(s)"
+    page.click("#gas-play")
+    page.wait_for_timeout(500)
+    painted = page.evaluate(NONBLANK_PIXELS_JS, "gas-canvas")
+    assert painted > 500, f"gas-canvas looks blank ({painted} painted pixels)"
+    print(f"  gas-canvas: {frames} frames, {painted} painted pixels")
+    assert page.locator("table tbody tr").count() >= 4, "check table has fewer than 4 rows"
+    assert page.locator("svg").count() >= 5, "fewer than 5 SVG plots"
+    page.screenshot(path=str(out / "gas.png"), full_page=True)
+    check_phone_layout(page, out / "gas-phone.png")
     return errors
 
 
@@ -112,6 +146,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     painted = page.evaluate(NONBLANK_PIXELS_JS, "pair-graph-canvas")
     assert painted > 500, f"GUI canvas looks blank ({painted} painted pixels)"
     page.screenshot(path=str(out / "gui.png"), full_page=True)
+    check_phone_layout(page, out / "gui-phone.png")
     return errors
 
 
@@ -144,6 +179,10 @@ def main() -> int:
                 failures.append(
                     f"report {args.report} does not exist (run python -m imigraph report)"
                 )
+            gas_pages = sorted(Path("output").glob("gas_*.html"))
+            if gas_pages:
+                page = browser.new_page(viewport={"width": 1200, "height": 900})
+                failures += check_gas_report(page, gas_pages[-1], args.out)
             if not args.skip_gui:
                 page = browser.new_page(viewport={"width": 1200, "height": 900})
                 failures += check_gui(page, args.gui, args.out, args.timeout)

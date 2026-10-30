@@ -57,3 +57,21 @@ svg.heatmap { width: 220px; height: 220px; }
 .heatmap-block { flex: 0 0 auto; }
 .legend-ref { color: var(--reference); font-weight: 600; }
 .legend-cand { color: var(--candidate); font-weight: 600; }
+
+/* Phones: tables scroll sideways instead of breaking the layout, cards and type get tighter,
+   charts and canvases already scale to the column width. */
+.table-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+@media (max-width: 640px) {
+  body { padding: 12px 10px 32px; font-size: 14px; }
+  h1 { font-size: 20px; }
+  h2 { font-size: 17px; margin-top: 22px; }
+  .card { padding: 10px 10px; border-radius: 8px; }
+  .row { gap: 10px; }
+  .row > * { flex-basis: 100%; }
+  table { font-size: 12px; }
+  th, td { padding: 4px 5px; }
+  .controls { gap: 6px; }
+  .controls .label { min-width: 7ch; font-size: 13px; }
+  svg.heatmap { width: 150px; height: 150px; }
+  pre { font-size: 11px; overflow-x: auto; }
+}

@@ -95,10 +95,10 @@ def _rules_table(rules: list[dict[str, str]]) -> str:
             f"<td>{escape(rule['invariants'])}</td><td>{escape(rule['physics'])}</td></tr>"
         )
     return (
-        "<table><thead><tr><th>rule</th><th>rewrite</th><th>matches</th><th>choice</th>"
-        "<th>invariants</th><th>physics</th></tr></thead><tbody>"
+        '<div class="table-scroll"><table><thead><tr><th>rule</th><th>rewrite</th>'
+        "<th>matches</th><th>choice</th><th>invariants</th><th>physics</th></tr></thead><tbody>"
         + "".join(rows)
-        + "</tbody></table>"
+        + "</tbody></table></div>"
     )
 
 
@@ -260,8 +260,10 @@ def _checks_table(report: ComparisonReport) -> str:
             f"<td>{escape(check.detail)}</td></tr>"
         )
     return (
-        "<table><thead><tr><th>check</th><th>verdict</th><th>value</th><th>threshold</th>"
-        "<th>detail</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+        '<div class="table-scroll"><table><thead><tr><th>check</th><th>verdict</th><th>value'
+        "</th><th>threshold</th><th>detail</th></tr></thead><tbody>"
+        + "".join(rows)
+        + "</tbody></table></div>"
     )
 
 

@@ -28,10 +28,13 @@ def _nice_ticks(low: float, high: float, count: int = 5) -> list[float]:
     residual = raw / magnitude
     nice = 1 if residual < 1.5 else 2 if residual < 3 else 5 if residual < 7 else 10
     step = nice * magnitude
+    # A step below the float resolution of the values would never advance ``value``.
+    if step <= 1e-12 * max(abs(low), abs(high), 1.0):
+        return [low, high]
     first = math.floor(low / step) * step
     ticks = []
     value = first
-    while value <= high + step * 1e-9:
+    while value <= high + step * 1e-9 and len(ticks) < 100:
         if value >= low - step * 1e-9:
             ticks.append(round(value, 12))
         value += step
@@ -173,7 +176,11 @@ def line_chart(
         y_range = (y_low - margin if y_low < 0 else 0.0, y_high + margin)
     else:
         y_low = float(np.nanmin(ys))
-        margin = 0.1 * (y_high - y_low) or 0.1 * abs(y_high) or 1.0
+        span = y_high - y_low
+        if span <= 1e-9 * max(abs(y_high), abs(y_low), 1.0):  # constant to rounding
+            margin = 0.1 * max(abs(y_high), 1.0)
+        else:
+            margin = 0.1 * span
         y_range = (y_low - margin, y_high + margin)
     axes = Axes(width, height, (float(xs.min()), float(xs.max())), y_range)
     parts = axes.frame(title, xlabel, ylabel)
@@ -207,10 +214,16 @@ def histogram_chart(
     ylabel: str = "count",
     width: int = 640,
     height: int = 336,
+    curves: list[Series] | None = None,
 ) -> str:
-    """Overlaid step histograms with shared ``edges``; ``counts`` holds (label, counts, color)."""
+    """Overlaid step histograms with shared ``edges``; ``counts`` holds (label, counts, color).
+
+    ``curves`` are drawn as lines on the same axes (e.g. a theoretical density scaled to counts).
+    """
     edges = np.asarray(edges, dtype=float)
     top = max(float(np.max(c)) for _, c, _ in counts) if counts else 1.0
+    for curve in curves or []:
+        top = max(top, float(np.nanmax(curve.y)))
     axes = Axes(width, height, (float(edges[0]), float(edges[-1])), (0.0, top * 1.1 or 1.0))
     parts = axes.frame(title, xlabel, ylabel)
     for _label, values, color in counts:
@@ -223,7 +236,19 @@ def histogram_chart(
             f'<polygon points="{" ".join(points)}" fill="{color}" opacity="0.18" stroke="{color}" '
             f'stroke-width="1.5"/>'
         )
-    parts += axes.legend([(label, color, False) for label, _, color in counts])
+    for curve in curves or []:
+        points = " ".join(
+            f"{axes.px(x):.1f},{axes.py(y):.1f}" for x, y in zip(curve.x, curve.y, strict=True)
+        )
+        dash = ' stroke-dasharray="6 4"' if curve.dashed else ""
+        parts.append(
+            f'<polyline points="{points}" fill="none" stroke="{curve.color}" '
+            f'stroke-width="2"{dash}/>'
+        )
+    parts += axes.legend(
+        [(label, color, False) for label, _, color in counts]
+        + [(curve.label, curve.color, curve.dashed) for curve in curves or []]
+    )
     return _svg(width, height, parts)
 
 

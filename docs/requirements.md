@@ -56,7 +56,10 @@ search, and later machine learning).
 7. Requirements, documentation and steps saved in the repository; skills that support the
    agent workflow.
 
-See `docs/architecture.md` and `docs/comparison-method.md` for what was built.
+See `docs/architecture.md` and `docs/comparison-method.md` for what was built. Added on the
+maintainer's request afterwards: energy, momentum and entropy metrics; the rule explained in the
+report with an animated diagram; a history of result pages; and a second, energy-conserving
+reference system (hard-disk gas) with no graph imitation yet.
 
 ## 5. Modelling with graphs: starting points
 
