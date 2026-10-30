@@ -1,0 +1,56 @@
+# Development without installing anything on the host: every command runs in the same image that
+# sandcastle uses for its agents (.sandcastle/Dockerfile, image sandcastle:imigraph).
+#
+#   docker compose build dev                               # build the image (once, or after Dockerfile changes)
+#   docker compose run --rm dev uv run pytest              # tests
+#   docker compose run --rm dev uv run ruff check .        # lint
+#   docker compose run --rm dev pre-commit run --all-files # what the commit hook runs
+#   docker compose run --rm dev python -m imigraph report  # write output/*.html
+#   docker compose run --rm dev git commit -m "..."        # commit with the hooks of the container
+#   docker compose run --rm dev                            # interactive shell
+#   docker compose up web                                  # Pyodide GUI at http://localhost:8000
+#
+# The repository is bind-mounted at /home/agent/workspace; the Python environment lives in the
+# container (/home/agent/venv), so the host's .venv is never touched.
+services:
+  dev:
+    image: sandcastle:imigraph
+    build:
+      context: .
+      dockerfile: .sandcastle/Dockerfile
+    working_dir: /home/agent/workspace
+    entrypoint: ["bash", "docker/entrypoint.sh"]
+    command: ["bash"]
+    environment:
+      # Git must trust the bind-mounted repository (owned by another uid) even in tools that run
+      # git without the global config, such as the betterleaks pre-commit hook.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /home/agent/workspace
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/home/agent/workspace
+      - uv-cache:/home/agent/.cache/uv
+      # Read-only, only user.name and user.email are copied into the container (see entrypoint.sh).
+      - ${USERPROFILE:-${HOME}}/.gitconfig:/home/agent/host.gitconfig:ro
+
+  web:
+    image: sandcastle:imigraph
+    working_dir: /home/agent/workspace
+    entrypoint: ["bash", "docker/entrypoint.sh"]
+    command: ["bash", "docker/serve-web.sh"]
+    environment:
+      # Git must trust the bind-mounted repository (owned by another uid) even in tools that run
+      # git without the global config, such as the betterleaks pre-commit hook.
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /home/agent/workspace
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/home/agent/workspace
+      - uv-cache:/home/agent/.cache/uv
+
+volumes:
+  uv-cache:

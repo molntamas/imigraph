@@ -231,3 +231,7 @@ __marimo__/
 
 # --- node (sandcastle orchestrator) ---
 node_modules/
+
+# --- generated output (python -m imigraph report, Pyodide wheel) ---
+output/
+web/dist/
