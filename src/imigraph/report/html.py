@@ -164,20 +164,38 @@ def _config_table(config: ExperimentConfig) -> str:
     return f"<table><tbody>{rows}</tbody></table>"
 
 
+def page_data(
+    result: ExperimentResult, demo: GraphHistory, max_particles: int = 300
+) -> dict[str, Any]:
+    """The JSON-serialisable blob the animations are driven by (report page and browser GUI)."""
+    return {
+        "config": result.config.to_dict(),
+        "reference": _trajectory_blob(result.reference, max_particles),
+        "graph": _trajectory_blob(result.graph_history.project(), max_particles),
+        "demo": _demo_blob(demo),
+        "report": result.report.to_dict(),
+    }
+
+
+def fragments(result: ExperimentResult) -> dict[str, str]:
+    """HTML fragments of the comparison section: the check table and the SVG plots."""
+    report = result.report
+    frames = report["marginals"].data["frames"]
+    return {
+        "checks_table": _checks_table(report),
+        "msd_chart": _msd_chart(report, result.config),
+        "marginal_early": _marginal_chart(result, int(frames[0])),
+        "marginal_final": _marginal_chart(result, int(frames[-1])),
+        "occupancy_charts": _occupancy_charts(report),
+    }
+
+
 def build_report(
     result: ExperimentResult, demo: GraphHistory | None = None, max_particles: int = 300
 ) -> str:
     """Render the HTML page for an experiment result."""
     demo = default_demo() if demo is None else demo
     report = result.report
-    data = {
-        "config": result.config.to_dict(),
-        "reference": _trajectory_blob(result.reference, max_particles),
-        "graph": _trajectory_blob(result.graph_history.project(), max_particles),
-        "demo": _demo_blob(demo),
-        "report": report.to_dict(),
-    }
-    frames = report["marginals"].data["frames"]
     verdict = "pass" if report.passed else "fail"
     template = Template(_asset("report.html"))
     return template.substitute(
@@ -194,14 +212,10 @@ def build_report(
         shown=min(max_particles, result.config.particles),
         demo_nodes=demo.space.num_nodes,
         demo_walkers=demo.num_walkers,
-        checks_table=_checks_table(report),
-        num_marginal_times=len(frames),
-        msd_chart=_msd_chart(report, result.config),
-        marginal_early=_marginal_chart(result, int(frames[0])),
-        marginal_final=_marginal_chart(result, int(frames[-1])),
+        num_marginal_times=len(report["marginals"].data["frames"]),
         occupancy_bins=report["occupancy"].data["reference"].shape[0],
-        occupancy_charts=_occupancy_charts(report),
-        data_json=json.dumps(data, separators=(",", ":")),
+        data_json=json.dumps(page_data(result, demo, max_particles), separators=(",", ":")),
+        **fragments(result),
     )
 
 

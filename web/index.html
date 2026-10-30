@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>imigraph live: Brownian motion vs lattice graph</title>
+<link rel="stylesheet" href="dist/report.css">
+<style>
+  form.params { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 16px; }
+  form.params label { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); }
+  form.params input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+  #status { font-variant-numeric: tabular-nums; }
+  #results { display: none; }
+  pre#markdown { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>imigraph live: Brownian motion in a box, imitated by a graph</h1>
+<p class="muted">The same Python package as the tests, running in your browser through Pyodide (Python 3.14 in
+WebAssembly). The first run downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.</p>
+
+<div class="card">
+<form class="params" id="params" onsubmit="return false;">
+  <label>particles <input name="particles" type="number" value="1000" min="2" step="1"></label>
+  <label>steps <input name="steps" type="number" value="2000" min="1" step="1"></label>
+  <label>record every <input name="record_every" type="number" value="50" min="1" step="1"></label>
+  <label>lattice size <input name="lattice_size" type="number" value="41" min="3" step="1"></label>
+  <label>spacing a <input name="spacing" type="number" value="0.2" min="0.001" step="0.01"></label>
+  <label>step time &tau; <input name="step_time" type="number" value="0.01" min="0.0001" step="0.001"></label>
+  <label>seed <input name="seed" type="number" value="0" step="1"></label>
+</form>
+<div class="controls">
+  <button id="run" disabled>Loading Python...</button>
+  <span id="status" class="muted"></span>
+</div>
+<p class="muted">D = a&sup2; / (4&tau;) for both systems. Smaller runs finish faster in the browser.</p>
+</div>
+
+<div id="results">
+<p>Verdict of the comparison framework: <span id="verdict" class="badge"></span></p>
+
+<h2>1. Reference and graph projection, side by side</h2>
+<div class="card">
+<div class="row">
+<div><p class="muted legend-ref">Brownian motion in a box</p><canvas id="pair-reference-canvas" width="520" height="520"></canvas></div>
+<div><p class="muted legend-cand">Walkers on the lattice graph (node coordinates)</p><canvas id="pair-graph-canvas" width="520" height="520"></canvas></div>
+</div>
+<div class="controls"><button id="pair-play">Play</button><input id="pair-slider" type="range"><span id="pair-label" class="label"></span></div>
+</div>
+
+<h2>2. The graph, step by step (small instance)</h2>
+<div class="card">
+<canvas id="demo-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
+</div>
+
+<h2>3. Comparison</h2>
+<div class="card" id="checks-table"></div>
+<div class="card" id="msd-chart"></div>
+<div class="card"><div class="row"><div id="marginal-early"></div><div id="marginal-final"></div></div></div>
+<div class="card"><div class="row" id="occupancy-charts"></div></div>
+<div class="card"><pre id="markdown"></pre></div>
+</div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.js"></script>
+<script src="dist/viz.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
