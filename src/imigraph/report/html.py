@@ -115,15 +115,16 @@ def _marginal_chart(result: ExperimentResult, frame: int) -> str:
 
 def _occupancy_charts(report: ComparisonReport) -> str:
     data = report["occupancy"].data
-    return (
-        svg.heatmap(
-            data["reference"], f"{report.reference_label}, final frame", svg.REFERENCE_COLOR
+    blocks = []
+    for label, key, color, css in (
+        (report.reference_label, "reference", svg.REFERENCE_COLOR, "legend-ref"),
+        (report.candidate_label, "candidate", svg.CANDIDATE_COLOR, "legend-cand"),
+    ):
+        blocks.append(
+            f'<div class="heatmap-block"><p class="muted {css}">{escape(label)}</p>'
+            f"{svg.heatmap(data[key], color)}</div>"
         )
-        + "\n"
-        + svg.heatmap(
-            data["candidate"], f"{report.candidate_label}, final frame", svg.CANDIDATE_COLOR
-        )
-    )
+    return "\n".join(blocks)
 
 
 def _checks_table(report: ComparisonReport) -> str:

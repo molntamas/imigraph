@@ -134,11 +134,11 @@ class Axes:
         return parts
 
 
-def _svg(width: int, height: int, parts: list[str]) -> str:
+def _svg(width: int, height: int, parts: list[str], css_class: str = "chart") -> str:
     body = "\n".join(parts)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" '
-        f'width="{width}" height="{height}" role="img">\n{body}\n</svg>'
+        f'width="{width}" height="{height}" class="{css_class}" role="img">\n{body}\n</svg>'
     )
 
 
@@ -205,26 +205,20 @@ def histogram_chart(
     return _svg(width, height, parts)
 
 
-def heatmap(
-    counts: np.ndarray, title: str = "", color: str = REFERENCE_COLOR, size: int = 220
-) -> str:
+def heatmap(counts: np.ndarray, color: str = REFERENCE_COLOR, size: int = 220) -> str:
     """A grid of cells shaded by ``counts`` (rows are x bins, columns y bins; y grows upward)."""
     counts = np.asarray(counts, dtype=float)
     rows, cols = counts.shape
     top = float(counts.max()) if counts.size and counts.max() > 0 else 1.0
     cell = size / max(rows, cols)
-    parts = [
-        f'<rect width="{size}" height="{size + 28}" fill="white"/>',
-        f'<text x="0" y="16" font-size="13" font-weight="600" fill="{AXIS_COLOR}">'
-        f"{escape(title)}</text>",
-    ]
+    parts = [f'<rect width="{size}" height="{size}" fill="white"/>']
     for i in range(rows):
         for j in range(cols):
             opacity = 0.08 + 0.92 * counts[i, j] / top
-            x, y = i * cell, 28 + (cols - 1 - j) * cell
+            x, y = i * cell, (cols - 1 - j) * cell
             parts.append(
                 f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell:.1f}" height="{cell:.1f}" '
                 f'fill="{color}" opacity="{opacity:.3f}" stroke="white">'
                 f"<title>x bin {i}, y bin {j}: {int(counts[i, j])}</title></rect>"
             )
-    return _svg(size, size + 28, parts)
+    return _svg(size, size, parts, css_class="heatmap")

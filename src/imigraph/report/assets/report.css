@@ -52,6 +52,8 @@ th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--bord
 th { color: var(--muted); font-weight: 600; }
 td.pass { color: var(--pass); font-weight: 600; }
 td.fail { color: var(--fail); font-weight: 600; }
-svg { max-width: 100%; height: auto; }
+svg.chart { max-width: 100%; height: auto; }
+svg.heatmap { width: 220px; height: 220px; }
+.heatmap-block { flex: 0 0 auto; }
 .legend-ref { color: var(--reference); font-weight: 600; }
 .legend-cand { color: var(--candidate); font-weight: 600; }

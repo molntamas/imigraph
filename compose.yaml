@@ -9,6 +9,7 @@
 #   docker compose run --rm dev git commit -m "..."        # commit with the hooks of the container
 #   docker compose run --rm dev                            # interactive shell
 #   docker compose up web                                  # Pyodide GUI at http://localhost:8000
+#   docker compose --profile verify run --rm verify        # headless browser check of both pages
 #
 # The repository is bind-mounted at /home/agent/workspace; the Python environment lives in the
 # container (/home/agent/venv), so the host's .venv is never touched.
@@ -51,6 +52,21 @@ services:
     volumes:
       - .:/home/agent/workspace
       - uv-cache:/home/agent/.cache/uv
+
+  # Headless Chromium (Playwright) for checking the generated report and the GUI; not part of
+  # the sandcastle image on purpose. Starts the web service itself.
+  verify:
+    profiles: ["verify"]
+    image: imigraph-verify
+    build:
+      context: docker
+      dockerfile: verify.Dockerfile
+    working_dir: /work
+    command: ["python", "docker/check-pages.py", "--gui", "http://web:8000/"]
+    depends_on:
+      - web
+    volumes:
+      - .:/work
 
 volumes:
   uv-cache:
