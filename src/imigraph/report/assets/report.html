@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>imigraph: Brownian motion vs lattice graph</title>
+<style>
+$css
+</style>
+</head>
+<body>
+<main>
+<h1>imigraph: Brownian motion in a box, imitated by a graph</h1>
+<p class="muted">Generated $generated. Reference: <span class="legend-ref">$reference_label</span>.
+Candidate: <span class="legend-cand">$candidate_label</span>.
+Verdict of the comparison framework: <span class="badge $verdict">$verdict_upper</span></p>
+
+<div class="card">
+<h3>Experiment parameters</h3>
+<div class="row">
+<div>$config_table</div>
+<div>
+<p><strong>Reference.</strong> $particles independent particles start at the centre of the box and diffuse with
+coefficient D; walls reflect. Integrated with Euler&ndash;Maruyama, <code>x += sqrt(2 D dt) &xi;</code>.</p>
+<p><strong>Graph system.</strong> The space is a $lattice_size&times;$lattice_size square lattice with
+spacing a (boundary nodes carry self-loops so every node has four edges). Each particle is a <em>walker node</em> attached to
+one space node by a single edge. Every step the rule <code>{w,s}, {s,s'} &rarr; {w,s'}, {s,s'}</code> moves each
+walker edge along a uniformly random edge of its anchor. This is a random walk with D = a&sup2; / (4&tau;), which is the D the
+reference is run with.</p>
+<p><strong>Projection.</strong> A walker is placed on the coordinates of its node; for the distribution tests it is placed at a
+fixed random point inside the node's cell (resolution a).</p>
+</div>
+</div>
+</div>
+
+<h2>1. Reference: Brownian motion in a box</h2>
+<div class="card">
+<p class="muted">Showing $shown of $particles particles.</p>
+<canvas id="reference-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="reference-play">Play</button><input id="reference-slider" type="range"><span id="reference-label" class="label"></span></div>
+</div>
+
+<h2>2. The rule, explained</h2>
+<div class="card">
+<div class="row">
+<div>
+<p><strong>Ingredients.</strong> The <em>space</em> is a graph: lattice nodes (grey) joined by edges. A node at the
+boundary keeps a <em>self-loop</em> for every neighbour it lacks, so every node has exactly four edges; the self-loops
+are the walls. Each particle is a <em>walker node</em> (red), attached to the space by a single edge. The space never
+changes; the walker edges are the only things the rule rewrites.</p>
+<p><strong>The rule</strong> <code>{w,s}, {s,s'} &rarr; {w,s'}, {s,s'}</code>: find a walker edge {w,s} together with
+an edge {s,s'} at the same node s, and replace the walker edge by {w,s'}; the space edge stays. Every walker has four
+matches (one per edge at its node); one is chosen uniformly at random; all walkers are rewritten at the same time
+(synchronous update). A self-loop match {s,s} rewrites {w,s} into {w,s}: the walker stays where it is, which is how the
+wall reflects.</p>
+<p><strong>What follows from it.</strong> The number of walkers and the space are invariant. One application moves a
+walker by the lattice spacing a or by 0, so after k applications &lang;r&sup2;&rang; = k a&sup2;: a random walk with
+diffusion coefficient D = a&sup2; / (4&tau;), where &tau; is the duration of one application. That D is what the
+reference is run with. Many walkers on a large lattice then look like the Brownian cloud of section 4.</p>
+</div>
+<div>
+<p class="muted">One walker on a 5&times;5 space, each rule application shown in its four phases (state, match, choose,
+rewrite). The choices are those of the real rule with a fixed seed.</p>
+<canvas id="rule-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="rule-play">Play</button><input id="rule-slider" type="range"><span id="rule-label" class="label"></span></div>
+<p id="rule-phase" class="muted"></p>
+</div>
+</div>
+<h3>Rules in this experiment</h3>
+$rules_table
+</div>
+$graph_model
+
+<h2>3. Graph system: the graph, step by step</h2>
+<div class="card">
+<p class="muted">A small instance ($demo_nodes space nodes, $demo_walkers walkers, one rule application per frame).
+Grey: space nodes and edges. Red: walker nodes and the edge that anchors each to the space; the rule rewrites exactly these edges.</p>
+<canvas id="demo-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
+</div>
+
+<h2>4. Graph system projected to 2D, next to the reference</h2>
+<div class="card">
+<p class="muted">Same recorded times, same $shown particles shown on both sides. Left: reference. Right: walkers on their node coordinates.</p>
+<div class="row">
+<div><canvas id="pair-reference-canvas" width="520" height="520"></canvas></div>
+<div><canvas id="pair-graph-canvas" width="520" height="520"></canvas></div>
+</div>
+<div class="controls"><button id="pair-play">Play</button><input id="pair-slider" type="range"><span id="pair-label" class="label"></span></div>
+</div>
+
+<h2>5. Comparison</h2>
+<div class="card">
+$checks_table
+<p class="muted">The MSD check compares the curves within their statistical uncertainty; the marginal check runs two-sample
+Kolmogorov&ndash;Smirnov tests on x and y at $num_marginal_times times (Bonferroni-corrected); the occupancy check is a chi-square
+homogeneity test of the 2D histograms at the final time. See <code>docs/comparison-method.md</code>.</p>
+</div>
+<div class="card">
+$msd_chart
+</div>
+<div class="card">
+<div class="row">
+<div>$marginal_early</div>
+<div>$marginal_final</div>
+</div>
+</div>
+<div class="card">
+<h3>Occupancy at the final time ($occupancy_bins&times;$occupancy_bins grid)</h3>
+<div class="row">$occupancy_charts</div>
+</div>
+
+<h2>6. Energy, momentum, entropy, walls, spreading</h2>
+<div class="card">
+<p>Overdamped Brownian particles exchange energy and momentum with the bath, so neither is conserved particle by particle;
+what stays the same is the ensemble: the mean kinetic energy per particle (the temperature, 2D/dt per particle for free
+diffusion) and the total momentum (mean zero, fluctuating with the expected standard deviation). Both are measured from
+every simulation step, then averaged per recording interval, for both systems. The entropy is the Shannon entropy of the
+occupancy histogram: it rises from zero (everything at the centre) towards its maximum ln(bins) for a uniform occupancy,
+on average but not monotonically. Two rule-level metrics follow: the <em>wall interaction rate</em> (fraction of
+particles per step that were reflected, or that hopped along a self-loop) and the number of <em>occupied cells</em> of
+the lattice grid (a walker occupies the cell of its node), which rises from 1 towards the value for a uniform
+occupancy.</p>
+</div>
+<div class="card">$energy_chart</div>
+<div class="card">$momentum_chart</div>
+<div class="card">$entropy_chart</div>
+<div class="card">$wall_rate_chart</div>
+<div class="card">$occupied_chart</div>
+
+<p class="muted">Report of <code>imigraph.experiments.brownian_vs_graph</code>; regenerate with
+<code>docker compose run --rm dev python -m imigraph report</code>.</p>
+</main>
+
+<script id="data" type="application/json">$data_json</script>
+<script>
+$viz_js
+</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const V = window.imigraphViz;
+  const byId = function (id) { return document.getElementById(id); };
+  const timeLabel = function (times) { return function (f) { return "t = " + times[f].toFixed(2); }; };
+
+  const reference = V.Viewport(byId("reference-canvas"), data.reference.box);
+  V.Player(data.reference.times.length, function (f) {
+    reference.clear();
+    V.drawParticles(reference, data.reference.positions[f], V.COLORS.reference, 2.5);
+  }, { slider: byId("reference-slider"), button: byId("reference-play"), label: byId("reference-label"),
+        labelFor: timeLabel(data.reference.times), interval: 100 });
+
+  const rule = V.Viewport(byId("rule-canvas"), data.rule.space.box, 40);
+  V.Player((data.rule.times.length - 1) * 4, function (f) {
+    const step = Math.floor(f / 4), phase = f % 4;
+    rule.clear();
+    const path = data.rule.paths ? data.rule.paths[step][0] : [data.rule.anchors[step][0], data.rule.anchors[step + 1][0]];
+    V.drawRuleStep(rule, data.rule.space, path, data.rule.anchors[step + 1][0], phase);
+    byId("rule-phase").textContent = V.RULE_PHASES[phase];
+  }, { slider: byId("rule-slider"), button: byId("rule-play"), label: byId("rule-label"),
+        labelFor: function (f) { return "step " + Math.floor(f / 4) + "." + (f % 4); }, interval: 700 });
+
+  const demo = V.Viewport(byId("demo-canvas"), data.demo.space.box, 24);
+  V.Player(data.demo.times.length, function (f) {
+    demo.clear();
+    V.drawSpace(demo, data.demo.space.coordinates, data.demo.space.edges, 4);
+    V.drawWalkers(demo, data.demo.space.coordinates, data.demo.anchors[f], data.demo.space.spacing);
+  }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
+        labelFor: function (f) { return "step " + f; }, interval: 500 });
+
+  const pairReference = V.Viewport(byId("pair-reference-canvas"), data.reference.box);
+  const pairGraph = V.Viewport(byId("pair-graph-canvas"), data.graph.box);
+  V.Player(data.reference.times.length, function (f) {
+    pairReference.clear();
+    V.drawParticles(pairReference, data.reference.positions[f], V.COLORS.reference, 2.5);
+    pairGraph.clear();
+    V.drawParticles(pairGraph, data.graph.positions[f], V.COLORS.candidate, 2.5);
+  }, { slider: byId("pair-slider"), button: byId("pair-play"), label: byId("pair-label"),
+        labelFor: timeLabel(data.reference.times), interval: 100 });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>imigraph: energy-conserving gases, hard disks vs a lattice gas on the graph</title>
+<style>
+$css
+</style>
+</head>
+<body>
+<main>
+<h1>imigraph: a hard-disk gas and a lattice gas on the graph, both conserving energy</h1>
+<p class="muted">Generated $generated. Reference: <span class="legend-ref">hard-disk gas</span> (continuous, elastic
+collisions). Candidate: <span class="legend-cand">lattice gas on the walker graph</span> (HPP rules, collisions as
+edge rewrites). Verdict of the conservation checks of both systems: <span class="badge $verdict">$verdict_upper</span></p>
+
+<div class="card">
+<h3>Parameters</h3>
+<div class="row">
+<div><p class="legend-ref">Hard-disk gas</p>$gas_config_table</div>
+<div><p class="legend-cand">Lattice gas on the graph</p>$lattice_config_table</div>
+</div>
+<div class="row">
+<div>
+<p><strong>Hard-disk gas.</strong> $gas_particles disks move in straight lines. When two disks overlap while approaching
+each other, the velocity components along the line of centres are exchanged (an elastic collision of equal masses),
+which conserves momentum and kinetic energy exactly; the overlap is then removed. Walls are specular. Collision times are
+quantised to the time step, which never changes the energy.</p>
+</div>
+<div>
+<p><strong>Lattice gas on the graph.</strong> $lattice_particles walkers live on a $lattice_size&times;$lattice_size lattice
+graph. A walker is the hyperedge {w,s,s&prime;}: it sits on site s and heads for the neighbour s&prime; along an edge with
+a direction label, so it has a velocity of fixed speed c = a/&tau;. Three rules are applied to all walkers at once each
+step: <em>Collide</em> (a head-on pair on one site leaves at right angles), <em>Reflect</em> (a walker heading into a wall
+self-loop turns round) and <em>Stream</em> (every walker moves one edge). At most one walker per channel (site,
+direction). This is the HPP lattice gas written as graph rewriting.</p>
+</div>
+</div>
+<p><strong>The experiment.</strong> Both gases start in the left half of the box with speed 1 and expand into the empty
+half; both are recorded every 0.1 time units. Energy must stay constant, the momentum must stay bounded (walls take
+momentum) or constant (periodic walls), the occupancy entropy must rise to the uniform value, and particles must have
+collided ($gas_collisions disk collisions, $lattice_collisions lattice collisions in this run). The hard-disk gas also
+relaxes to the Maxwell&ndash;Boltzmann speed law; the lattice gas cannot, because every walker keeps the speed c, and
+the page says so instead of hiding it.</p>
+</div>
+
+$graph_model
+
+<h2>1. The two gases, side by side</h2>
+<div class="card">
+<p class="muted">Left: disks. Right: lattice-gas walkers drawn as arrows from their site in their direction of motion.</p>
+<div class="row">
+<div><canvas id="gas-canvas" width="520" height="520"></canvas></div>
+<div><canvas id="lattice-canvas" width="520" height="520"></canvas></div>
+</div>
+<div class="controls"><button id="gas-play">Play</button><input id="gas-slider" type="range"><span id="gas-label" class="label"></span>
+<label class="muted">speed <input id="gas-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="gas-speed-label"></span></label></div>
+</div>
+
+<h2>2. The lattice-gas rules, step by step</h2>
+<div class="card">
+<div class="row">
+<div>
+<p><strong>Collide</strong> <code>{w1,s,a}, {w2,s,b}, {s,c}, {s,d} &rarr; {w1,s,c}, {w2,s,d}, {s,c}, {s,d}</code>: two
+walkers on site s heading in opposite directions a, b, whose perpendicular channels c, d are empty real edges, leave
+along c and d (which walker takes c is random). Momentum a + b = 0 = c + d and energy are unchanged; the number of
+walkers per channel stays at most one.</p>
+<p><strong>Reflect</strong> <code>{w,s,s} &rarr; {w,s,s&prime;}</code>: a walker heading into a self-loop (a wall) turns
+round; the wall takes the momentum. On a periodic lattice the rule never matches and the total momentum is exact.</p>
+<p><strong>Stream</strong> <code>{w,s,s&prime;}<sub>k</sub>, {s&prime;,s&Prime;}<sub>k</sub> &rarr;
+{w,s&prime;,s&Prime;}<sub>k</sub></code>: every walker moves one edge and keeps its direction label k. The three rules
+are applied in this order to all walkers simultaneously; together they are one time step &tau;.</p>
+<p class="muted">Six walkers on a 7&times;7 lattice. Arrows: walkers and their headings. Orange rings: sites where
+Collide fired in the step that leads to the shown frame. The first collision happens at the centre in step 2; the walker
+at the right edge reflects.</p>
+</div>
+<div>
+<canvas id="demo-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
+</div>
+</div>
+<h3>Rules of the lattice gas</h3>
+$rules_table
+</div>
+
+<h2>3. Checks against kinetic theory</h2>
+<div class="card">
+<p class="legend-ref">Hard-disk gas</p>
+$gas_checks_table
+</div>
+<div class="card">
+<p class="legend-cand">Lattice gas on the graph</p>
+$lattice_checks_table
+</div>
+
+<h2>4. Lattice gas compared with the hard-disk gas</h2>
+<div class="card">
+<p>The distribution checks of the comparison framework, run on the two projected trajectories at the same recording
+times. The late-time occupancy is expected to agree (both gases end up uniform); the mean squared displacement is
+expected to differ at early times, because the lattice walkers stream ballistically along the axes from random sites
+while the disks start on a grid and scatter in all directions. The table reports what it finds; the verdict at the top
+of the page is about conservation, not about this table.</p>
+$comparison_table
+<h3>Occupancy at the final time</h3>
+<div class="row">$occupancy_charts</div>
+</div>
+
+<h2>5. Energy, momentum, entropy, collisions, speeds</h2>
+<div class="card">$energy_chart</div>
+<div class="card">$momentum_chart</div>
+<div class="card">$entropy_chart</div>
+<div class="card">$collisions_chart</div>
+<div class="card">$speed_chart</div>
+
+<p class="muted">Page of <code>imigraph.experiments.gas</code>; regenerate with
+<code>docker compose run --rm -T dev uv run python -m imigraph gas-report --label &lt;change&gt;</code>.</p>
+</main>
+
+<script id="data" type="application/json">$data_json</script>
+<script>
+$viz_js
+</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const V = window.imigraphViz;
+  const byId = function (id) { return document.getElementById(id); };
+  const gas = V.Viewport(byId("gas-canvas"), data.gas.box);
+  const lattice = V.Viewport(byId("lattice-canvas"), data.lattice.box);
+  const pair = V.Player(data.gas.times.length, function (f) {
+    gas.clear();
+    V.drawParticles(gas, data.gas.positions[f], V.COLORS.reference, data.gas.radius * gas.scale);
+    lattice.clear();
+    V.drawArrows(lattice, data.lattice.positions[f], data.lattice.positions[f].map(function (_, i) { return i; }),
+                 data.lattice.directions[f], data.lattice.spacing, V.COLORS.candidate);
+  }, { slider: byId("gas-slider"), button: byId("gas-play"), label: byId("gas-label"),
+        labelFor: function (f) { return "t = " + data.gas.times[f].toFixed(2); }, interval: 60 });
+  V.speedControl(byId("gas-speed"), byId("gas-speed-label"), [pair]);
+
+  const demo = V.Viewport(byId("demo-canvas"), data.demo.space.box, 30);
+  V.Player(data.demo.sites.length, function (f) {
+    demo.clear();
+    V.drawSpace(demo, data.demo.space.coordinates, data.demo.space.edges, 5);
+    if (f > 0) V.drawCollisionMarks(demo, data.demo.space.coordinates, data.demo.collisions[f - 1], data.demo.space.spacing);
+    V.drawArrows(demo, data.demo.space.coordinates, data.demo.sites[f], data.demo.directions[f], data.demo.space.spacing);
+  }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
+        labelFor: function (f) { return "step " + f; }, interval: 600 });
+})();
+</script>
+</body>
+</html>

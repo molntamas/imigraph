@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Pre-commit hook used inside the dev container (compose.yaml sets core.hooksPath to this
+# directory). The hook that `pre-commit install` writes on a Windows host has CRLF line endings
+# and a Windows interpreter path, so Linux cannot execute it; this one runs the same thing.
+exec pre-commit hook-impl --config=.pre-commit-config.yaml --hook-type=pre-commit \
+  --hook-dir "$(cd "$(dirname "$0")" && pwd)" -- "$@"
