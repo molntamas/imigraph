@@ -68,4 +68,4 @@ Not covered by the smoke test, and known to be broken for an agent run:
 - [x] changes made (commit `1ff9a19` plus the identity fix)
 - [x] image rebuilt (4.0 GB with Chromium), smoke test: every check green except the push
       dry-run (token permissions, see above)
-- [ ] merged to main
+- [x] merged to main (2026-10-31); `docker compose --profile verify` re-verified with the rebuilt image
