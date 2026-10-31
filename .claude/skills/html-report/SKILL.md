@@ -67,6 +67,8 @@ docker compose run --rm -T dev uv run python -m imigraph report        # regener
 docker compose run --rm -T dev node --check src/imigraph/report/assets/viz.js
 docker compose run --rm -T dev node --check web/app.js
 docker compose --profile verify down && docker compose --profile verify run --rm verify
+# or, inside any container of the image (sandcastle sessions have no Docker):
+uv run python docker/check-pages.py --serve
 ```
 
 The `verify` run (`docker/check-pages.py`, headless Chromium) fails on JavaScript errors or

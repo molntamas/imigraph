@@ -5,6 +5,7 @@
  * only the keys listed in that file into the container.
  */
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -37,7 +38,44 @@ export const LABELS = {
 } as const;
 
 // GH_REPO makes every gh command inside the container target this repository.
-export const sandbox = () => docker({ imageName: IMAGE_NAME, env: { GH_REPO: GITHUB_REPO } });
+// GIT_CONFIG_*: git settings for the container process only (nothing is written to the .git
+// directory, which the worktree shares with the host checkout):
+//   - safe.directory=*: the bind-mounted worktree belongs to another uid as far as git is
+//     concerned; sandcastle adds it to the global config, but betterleaks (pre-commit hook) runs
+//     git without the global config, so the environment form is needed too;
+//   - core.hooksPath=docker/git-hooks: commits run the LF hook of the repository instead of the
+//     hook a Windows host installed into the shared .git/hooks (CRLF, Windows interpreter path,
+//     cannot run on Linux).
+// Commit identity: sandcastle copies user.name/user.email into the container's global git
+// config, but a name with a space arrived empty there ("empty ident name" on commit, seen
+// 2026-10-31). The GIT_AUTHOR_* / GIT_COMMITTER_* variables need no quoting and take precedence.
+const hostGit = (key: string) => {
+  try {
+    return execFileSync("git", ["config", "--get", key], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+};
+const identity = () => {
+  const name = hostGit("user.name");
+  const email = hostGit("user.email");
+  if (!name || !email) return {};
+  return { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email };
+};
+
+export const sandbox = () =>
+  docker({
+    imageName: IMAGE_NAME,
+    env: {
+      ...identity(),
+      GH_REPO: GITHUB_REPO,
+      GIT_CONFIG_COUNT: "2",
+      GIT_CONFIG_KEY_0: "safe.directory",
+      GIT_CONFIG_VALUE_0: "*",
+      GIT_CONFIG_KEY_1: "core.hooksPath",
+      GIT_CONFIG_VALUE_1: "docker/git-hooks",
+    },
+  });
 
 export const hooks = {
   // git push/fetch authenticate with GH_TOKEN through a credential helper that reads the variable
@@ -49,10 +87,7 @@ export const hooks = {
   },
   // Project + any dependencies added since the image was built (the image pre-installs uv.lock).
   uvSync: { command: "uv sync --frozen", timeoutMs: 300_000 },
-  // The hook in .git/hooks is shared with all worktrees; install it if the host never did.
-  preCommit: {
-    command: `[ -f "$(git rev-parse --git-common-dir)/hooks/pre-commit" ] || pre-commit install`,
-  },
+  // Commit hooks need no installation: core.hooksPath (see sandbox()) points at docker/git-hooks.
 };
 
 // ---------- GitHub REST, host side ----------

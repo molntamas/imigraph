@@ -53,20 +53,24 @@ services:
       - .:/home/agent/workspace
       - uv-cache:/home/agent/.cache/uv
 
-  # Headless Chromium (Playwright) for checking the generated report and the GUI; not part of
-  # the sandcastle image on purpose. Starts the web service itself.
+  # Headless check of the generated pages and the GUI with the Chromium of the sandcastle image
+  # (playwright is a dev dependency). Starts the web service itself. Inside a sandcastle
+  # session the same check runs without compose: uv run python docker/check-pages.py --serve
   verify:
     profiles: ["verify"]
-    image: imigraph-verify
-    build:
-      context: docker
-      dockerfile: verify.Dockerfile
-    working_dir: /work
-    command: ["python", "docker/check-pages.py", "--gui", "http://web:8000/"]
+    image: sandcastle:imigraph
+    working_dir: /home/agent/workspace
+    entrypoint: ["bash", "docker/entrypoint.sh"]
+    command: ["uv", "run", "python", "docker/check-pages.py", "--gui", "http://web:8000/"]
+    environment:
+      GIT_CONFIG_COUNT: "1"
+      GIT_CONFIG_KEY_0: safe.directory
+      GIT_CONFIG_VALUE_0: /home/agent/workspace
     depends_on:
       - web
     volumes:
-      - .:/work
+      - .:/home/agent/workspace
+      - uv-cache:/home/agent/.cache/uv
 
 volumes:
   uv-cache:
