@@ -50,7 +50,8 @@
     }
   }
 
-  function drawSpace(vp, coordinates, edges, nodeRadius) {
+  // `maxLength` (box units, optional) hides the wrap-around edges of a periodic lattice.
+  function drawSpace(vp, coordinates, edges, nodeRadius, maxLength) {
     const ctx = vp.ctx;
     ctx.strokeStyle = COLORS.edge;
     ctx.lineWidth = 1;
@@ -58,11 +59,52 @@
     for (let e = 0; e < edges.length; e++) {
       const a = coordinates[edges[e][0]];
       const b = coordinates[edges[e][1]];
+      if (maxLength && Math.hypot(a[0] - b[0], a[1] - b[1]) > maxLength) continue;
       ctx.moveTo(vp.x(a[0]), vp.y(a[1]));
       ctx.lineTo(vp.x(b[0]), vp.y(b[1]));
     }
     ctx.stroke();
     drawParticles(vp, coordinates, COLORS.space, nodeRadius);
+  }
+
+  // Lattice-gas walkers: an arrow from the site in the walker's direction (its heading edge).
+  function drawArrows(vp, coordinates, sites, directions, spacing, color) {
+    const ctx = vp.ctx;
+    const len = 0.42 * spacing;
+    const head = Math.max(4, 0.12 * spacing * vp.scale);
+    ctx.strokeStyle = color || COLORS.walker;
+    ctx.fillStyle = color || COLORS.walker;
+    ctx.lineWidth = 2;
+    for (let w = 0; w < sites.length; w++) {
+      const a = coordinates[sites[w]];
+      const d = LOOP_DIRECTIONS[directions[w]];
+      const x0 = vp.x(a[0]), y0 = vp.y(a[1]);
+      const x1 = vp.x(a[0] + len * d[0]), y1 = vp.y(a[1] + len * d[1]);
+      ctx.beginPath();
+      ctx.moveTo(x0, y0);
+      ctx.lineTo(x1, y1);
+      ctx.stroke();
+      const angle = Math.atan2(y1 - y0, x1 - x0);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x1 - head * Math.cos(angle - 0.5), y1 - head * Math.sin(angle - 0.5));
+      ctx.lineTo(x1 - head * Math.cos(angle + 0.5), y1 - head * Math.sin(angle + 0.5));
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+
+  // Rings around the sites where a Collide rule fired in this step.
+  function drawCollisionMarks(vp, coordinates, sites, spacing) {
+    const ctx = vp.ctx;
+    ctx.strokeStyle = "#f59e0b";
+    ctx.lineWidth = 3;
+    for (let i = 0; i < sites.length; i++) {
+      const a = coordinates[sites[i]];
+      ctx.beginPath();
+      ctx.arc(vp.x(a[0]), vp.y(a[1]), 0.3 * spacing * vp.scale, 0, 2 * Math.PI);
+      ctx.stroke();
+    }
   }
 
   // Walker nodes are drawn next to their anchor node, joined by their edge; several walkers on
@@ -141,7 +183,7 @@
   function Player(count, draw, controls) {
     let frame = 0;
     let timer = null;
-    const interval = controls.interval || 80;
+    let interval = controls.interval || 80;
     function show(f) {
       frame = ((f % count) + count) % count;
       if (controls.slider) controls.slider.value = frame;
@@ -158,6 +200,11 @@
       timer = null;
       if (controls.button) controls.button.textContent = "Play";
     }
+    // Playback speed: `factor` scales the player's own interval (1 = as authored, 2 = twice as fast).
+    function setSpeed(factor) {
+      interval = Math.max(10, (controls.interval || 80) / factor);
+      if (timer) { pause(); play(); }
+    }
     if (controls.slider) {
       controls.slider.min = 0;
       controls.slider.max = count - 1;
@@ -167,17 +214,32 @@
       controls.button.addEventListener("click", function () { if (timer) pause(); else play(); });
     }
     show(0);
-    return { play: play, pause: pause, show: show };
+    return { play: play, pause: pause, show: show, setSpeed: setSpeed };
+  }
+
+  // Wires a range input (value = speed factor) to a list of players.
+  function speedControl(input, label, players) {
+    function apply() {
+      const factor = Number(input.value);
+      if (label) label.textContent = factor + "x";
+      players.forEach(function (p) { p.setSpeed(factor); });
+    }
+    input.addEventListener("input", apply);
+    apply();
   }
 
   global.imigraphViz = {
     COLORS: COLORS,
+    LOOP_DIRECTIONS: LOOP_DIRECTIONS,
     Viewport: Viewport,
     drawParticles: drawParticles,
     drawSpace: drawSpace,
     drawWalkers: drawWalkers,
+    drawArrows: drawArrows,
+    drawCollisionMarks: drawCollisionMarks,
     drawRuleStep: drawRuleStep,
     RULE_PHASES: RULE_PHASES,
     Player: Player,
+    speedControl: speedControl,
   };
 })(typeof window !== "undefined" ? window : globalThis);

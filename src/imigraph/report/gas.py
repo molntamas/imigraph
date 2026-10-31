@@ -1,4 +1,5 @@
-"""Self-contained HTML page of a hard-disk gas run (energy conservation, Maxwell-Boltzmann)."""
+"""Self-contained HTML page of the energy-conserving gases: the hard-disk gas next to the lattice
+gas on the walker graph, each checked against kinetic theory and compared with each other."""
 
 from __future__ import annotations
 
@@ -11,48 +12,116 @@ from typing import Any
 
 import numpy as np
 
-from imigraph.experiments.gas import GasConfig, GasResult, run_gas
+from imigraph.experiments.gas import (
+    GasComparison,
+    GasConfig,
+    GasResult,
+    LatticeGasConfig,
+    run_gas_comparison,
+)
+from imigraph.graph.gas import DIRECTIONS, LatticeGas, LatticeGasState
+from imigraph.graph.space import SquareLattice
 from imigraph.report import svg
-from imigraph.report.html import _asset, _checks_table, _rounded, report_filename, write_index
+from imigraph.report.html import (
+    _asset,
+    _checks_table,
+    _occupancy_charts,
+    _rounded,
+    _rules_table,
+    report_filename,
+    write_index,
+)
 
 GAS_STEM = "gas"
 
 
-def gas_page_data(result: GasResult) -> dict[str, Any]:
+def default_gas_demo(steps: int = 36, seed: int = 3) -> dict[str, Any]:
+    """A 7x7 lattice gas with walkers placed so that head-on collisions and wall reflections
+    happen within the first steps (the rest of the walkers are random)."""
+    lattice = SquareLattice(7)
+    gas = LatticeGas(lattice, step_time=1.0)
+    rng = np.random.default_rng(seed)
+    sites = [
+        lattice.node_index(1, 3),
+        lattice.node_index(5, 3),
+        lattice.node_index(3, 0),
+        lattice.node_index(3, 6),
+        lattice.node_index(0, 5),
+        lattice.node_index(6, 1),
+    ]
+    directions = [0, 1, 2, 3, 0, 1]
+    initial = LatticeGasState(lattice, np.array(sites), np.array(directions))
+    return gas.demo_dict(initial, steps, rng)
+
+
+def _directions_of(velocities: np.ndarray) -> np.ndarray:
+    """Direction label (0..3) of every recorded velocity, shape ``(T, n)``."""
+    return np.argmax(velocities @ DIRECTIONS.T, axis=2)
+
+
+def _system_blob(result: GasResult) -> dict[str, Any]:
     run = result.run
-    return {
+    blob: dict[str, Any] = {
         "config": result.config.to_dict(),
-        "radius": result.config.radius,
-        "trajectory": {
-            "times": _rounded(run.times, 4),
-            "positions": _rounded(run.trajectory.positions, 4),
-            "box": run.trajectory.box.to_dict(),
-        },
+        "times": _rounded(run.times, 4),
+        "positions": _rounded(run.trajectory.positions, 4),
+        "box": run.trajectory.box.to_dict(),
         "report": result.report.to_dict(),
-        "metrics": {
-            "energy": run.kinetic_energy().tolist(),
-            "momentum": run.momentum().tolist(),
-            "entropy": result.entropy.tolist(),
-            "collisions": run.collisions.tolist(),
-            "sigma": run.thermal_sigma,
-        },
+        "informative": [check.to_dict() for check in result.informative],
+        "energy": run.kinetic_energy().tolist(),
+        "momentum": run.momentum().tolist(),
+        "entropy": result.entropy.tolist(),
+        "collisions": run.collisions.tolist(),
+        "sigma": run.thermal_sigma,
+    }
+    if isinstance(result.config, LatticeGasConfig):
+        blob["directions"] = _directions_of(run.velocities).tolist()
+        blob["spacing"] = result.config.spacing
+        blob["rules"] = list(result.rules)
+    else:
+        blob["radius"] = result.config.radius
+    return blob
+
+
+def gas_page_data(comparison: GasComparison, demo: dict[str, Any] | None = None) -> dict[str, Any]:
+    return {
+        "gas": _system_blob(comparison.gas),
+        "lattice": _system_blob(comparison.lattice),
+        "comparison": comparison.report.to_dict(),
+        "demo": default_gas_demo() if demo is None else demo,
     }
 
 
-def _config_table(config: GasConfig) -> str:
-    labels = {
-        "particles": "disks",
-        "radius": "disk radius",
-        "packing_fraction": "packing fraction",
-        "speed": "initial speed of every disk",
-        "dt": "time step",
-        "steps": "steps",
-        "record_every": "record every (steps)",
-        "total_time": "total time",
-        "boundary": "walls",
-        "seed": "seed",
-        "entropy_bins": "entropy grid (bins per side)",
-    }
+def _config_table(config: GasConfig | LatticeGasConfig) -> str:
+    if isinstance(config, LatticeGasConfig):
+        labels = {
+            "size": "lattice sites per side",
+            "spacing": "lattice spacing a (= 1 / size)",
+            "step_time": "step time tau (= a / speed)",
+            "particles": "walkers",
+            "channel_fraction": "occupied fraction of the 4 size^2 channels",
+            "speed": "speed c = a / tau of every walker",
+            "steps": "steps",
+            "record_every": "record every (steps)",
+            "total_time": "total time",
+            "boundary": "walls",
+            "seed": "seed",
+            "entropy_bins": "entropy grid (bins per side)",
+        }
+    else:
+        labels = {
+            "particles": "disks",
+            "radius": "disk radius",
+            "packing_fraction": "packing fraction",
+            "speed": "initial speed of every disk",
+            "dt": "time step",
+            "steps": "steps",
+            "record_every": "record every (steps)",
+            "total_time": "total time",
+            "boundary": "walls",
+            "seed": "seed",
+            "entropy_bins": "entropy grid (bins per side)",
+        }
     values = config.to_dict()
     rows = []
     for key, label in labels.items():
@@ -62,55 +131,61 @@ def _config_table(config: GasConfig) -> str:
     return f"<table><tbody>{''.join(rows)}</tbody></table>"
 
 
-def gas_fragments(result: GasResult) -> dict[str, str]:
-    run = result.run
-    t = run.times
-    energy = run.kinetic_energy()
-    momentum = run.momentum()
-    scale = float(np.sqrt(2 * run.mass * energy[0] * run.trajectory.num_particles))
-    sigma = run.thermal_sigma
+def gas_fragments(comparison: GasComparison) -> dict[str, str]:
+    gas, lattice = comparison.gas, comparison.lattice
+    labels = ("hard-disk gas", "lattice gas on the graph")
+    colors = (svg.REFERENCE_COLOR, svg.CANDIDATE_COLOR)
+    t = gas.run.times
+    energies = (gas.run.kinetic_energy(), lattice.run.kinetic_energy())
+    momenta = (gas.run.momentum(), lattice.run.momentum())
+    n = gas.run.trajectory.num_particles
     from scipy import stats
 
+    sigma = gas.run.thermal_sigma
     rayleigh = stats.rayleigh(scale=sigma)
     edges = np.linspace(0.0, 4 * sigma, 33)
     width = edges[1] - edges[0]
     centres = (edges[:-1] + edges[1:]) / 2
-    n = run.trajectory.num_particles
-    initial, _ = np.histogram(run.speeds(0), edges)
-    final, _ = np.histogram(run.speeds(-1), edges)
+    gas_final, _ = np.histogram(gas.run.speeds(-1), edges)
+    lattice_final, _ = np.histogram(lattice.run.speeds(-1), edges)
+    bins = gas.config.entropy_bins
     return {
-        "checks_table": _checks_table(result.report),
-        "config_table": _config_table(result.config),
+        "gas_checks_table": _checks_table(gas.report),
+        "lattice_checks_table": _checks_table(lattice.report, lattice.informative),
+        "comparison_table": _checks_table(comparison.report),
+        "occupancy_charts": _occupancy_charts(comparison.report),
+        "gas_config_table": _config_table(gas.config),
+        "lattice_config_table": _config_table(lattice.config),
+        "rules_table": _rules_table(list(lattice.rules)),
         "energy_chart": svg.line_chart(
-            [svg.Series("total kinetic energy", t, energy, svg.REFERENCE_COLOR)],
-            title="Total kinetic energy (constant to rounding)",
+            [
+                svg.Series(label, t, energy, color)
+                for label, energy, color in zip(labels, energies, colors, strict=True)
+            ],
+            title="Total kinetic energy (both constant: to rounding, and exactly)",
             xlabel="time",
             ylabel="energy",
             zero_based=False,
         ),
         "momentum_chart": svg.line_chart(
             [
-                svg.Series("total momentum, x", t, momentum[:, 0], svg.REFERENCE_COLOR),
-                svg.Series("total momentum, y", t, momentum[:, 1], svg.CANDIDATE_COLOR),
-                svg.Series(
-                    "one particle's share, sqrt(2 m E / n)",
-                    t,
-                    np.full(t.shape, scale / n),
-                    svg.THEORY_COLOR,
-                    dashed=True,
-                ),
+                svg.Series(f"{labels[0]}, x", t, momenta[0][:, 0], colors[0]),
+                svg.Series(f"{labels[0]}, y", t, momenta[0][:, 1], colors[0], dashed=True),
+                svg.Series(f"{labels[1]}, x", t, momenta[1][:, 0], colors[1]),
+                svg.Series(f"{labels[1]}, y", t, momenta[1][:, 1], colors[1], dashed=True),
             ],
-            title="Total momentum (specular walls exchange momentum with the box)",
+            title="Total momentum (walls exchange momentum; exact with periodic walls)",
             xlabel="time",
             ylabel="momentum",
         ),
         "entropy_chart": svg.line_chart(
             [
-                svg.Series("occupancy entropy", t, result.entropy, svg.REFERENCE_COLOR),
+                svg.Series(labels[0], t, gas.entropy, colors[0]),
+                svg.Series(labels[1], t, lattice.entropy, colors[1]),
                 svg.Series(
-                    f"uniform, ln({result.config.entropy_bins}x{result.config.entropy_bins})",
+                    f"uniform, ln({bins}x{bins})",
                     t,
-                    np.full(t.shape, result.max_entropy),
+                    np.full(t.shape, gas.max_entropy),
                     svg.THEORY_COLOR,
                     dashed=True,
                 ),
@@ -121,21 +196,20 @@ def gas_fragments(result: GasResult) -> dict[str, str]:
         ),
         "collisions_chart": svg.line_chart(
             [
-                svg.Series(
-                    "collisions per recording interval", t[1:], run.collisions, svg.CANDIDATE_COLOR
-                )
+                svg.Series(labels[0], t[1:], gas.run.collisions, colors[0]),
+                svg.Series(labels[1], t[1:], lattice.run.collisions, colors[1]),
             ],
-            title="Disk-disk collisions per recording interval",
+            title="Collisions per recording interval",
             xlabel="time",
             ylabel="collisions",
         ),
         "speed_chart": svg.histogram_chart(
             edges,
             [
-                ("speeds at t = 0", initial, svg.CANDIDATE_COLOR),
-                (f"speeds at t = {t[-1]:.4g}", final, svg.REFERENCE_COLOR),
+                (f"{labels[0]} at t = {t[-1]:.4g}", gas_final, colors[0]),
+                (f"{labels[1]} at t = {t[-1]:.4g} (all at c)", lattice_final, colors[1]),
             ],
-            title="Speed distribution: from equal speeds to Maxwell-Boltzmann",
+            title="Final speed distributions: Maxwell-Boltzmann vs the single speed of HPP",
             xlabel="speed",
             curves=[
                 svg.Series(
@@ -150,30 +224,35 @@ def gas_fragments(result: GasResult) -> dict[str, str]:
     }
 
 
-def build_gas_report(result: GasResult) -> str:
-    verdict = "pass" if result.passed else "fail"
+def build_gas_report(comparison: GasComparison) -> str:
+    verdict = "pass" if comparison.passed else "fail"
     return Template(_asset("gas.html")).substitute(
         css=_asset("report.css"),
         viz_js=_asset("viz.js"),
+        graph_model=_asset("graph-model.html"),
         generated=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
         verdict=verdict,
         verdict_upper=verdict.upper(),
-        particles=result.config.particles,
-        collisions=int(result.run.collisions.sum()),
-        data_json=json.dumps(gas_page_data(result), separators=(",", ":")),
-        **gas_fragments(result),
+        gas_particles=comparison.gas.config.particles,
+        lattice_particles=comparison.lattice.config.particles,
+        lattice_size=comparison.lattice.config.size,
+        gas_collisions=int(comparison.gas.run.collisions.sum()),
+        lattice_collisions=int(comparison.lattice.run.collisions.sum()),
+        data_json=json.dumps(gas_page_data(comparison), separators=(",", ":")),
+        **gas_fragments(comparison),
     )
 
 
 def write_gas_report(
     path: str | Path,
     config: GasConfig | None = None,
-    result: GasResult | None = None,
+    result: GasComparison | None = None,
     label: str = "",
+    lattice_config: LatticeGasConfig | None = None,
 ) -> Path:
     """Write a new timestamped ``gas_<time>[_<label>].html`` (older pages are kept) and refresh
     the index of the directory; a path ending in ``.html`` writes exactly that file."""
-    result = run_gas(config) if result is None else result
+    result = run_gas_comparison(config, lattice_config) if result is None else result
     path = Path(path)
     if path.suffix.lower() != ".html":
         path = path / report_filename(label=label).replace("brownian_vs_graph", GAS_STEM, 1)

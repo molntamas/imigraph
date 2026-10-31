@@ -43,7 +43,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fo
 .badge.pass { background: var(--pass); }
 .badge.fail { background: var(--fail); }
 canvas { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; background: white; }
-.controls { display: flex; align-items: center; gap: 10px; margin: 8px 0; }
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 8px 0; }
+.controls label { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.controls label input[type="range"] { width: 90px; flex: none; }
 .controls input[type="range"] { flex: 1; }
 .controls button { padding: 4px 14px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; }
 .controls .label { min-width: 9ch; font-variant-numeric: tabular-nums; }

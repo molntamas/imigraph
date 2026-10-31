@@ -1,0 +1,27 @@
+<div class="card">
+<h3>The graph model: questions and answers</h3>
+<p><strong>What type of graph is this?</strong> Two kinds of nodes. The <em>space</em> is a static square lattice:
+<em>site nodes</em> joined by edges that carry a direction label (+x, &minus;x, +y, &minus;y; the lattice is used as the
+Cayley graph of &#8484;&sup2;), with a self-loop at every boundary site for each neighbour it lacks (the walls) or, on a
+periodic lattice, wrap-around edges instead. Each particle is a separate <em>walker node</em>. Walker nodes connect only
+to site nodes, so the combined graph is bipartite between the two types; the types are explicit
+(<code>WalkerGraph.to_networkx()</code> marks every node <code>kind="space"</code> or <code>kind="walker"</code>). The
+random-hop walker is attached by one plain edge {w,s}. The lattice-gas walker is attached by an ordered hyperedge
+{w,s,s&prime;}: its position s and its heading s&prime;, which is its velocity.</p>
+<p><strong>How are energy, momentum and entropy computed in the graph simulation?</strong> Random hop: a walker has no
+velocity of its own, so the kinetic energy and the momentum of a step are read off the displacement
+<code>&Delta;r</code> of that step: <code>m |&Delta;r|&sup2; / (2&tau;&sup2;)</code> and <code>m &Delta;r / &tau;</code>,
+averaged per recording interval. They are stationary ensemble values (the temperature 2mD/&tau; and a momentum that
+fluctuates around zero), not conserved quantities: the walker trades them with the implicit bath, like a Brownian
+particle. Lattice gas: every walker moves one spacing per step, so its speed is c = a/&tau; and its energy
+<code>mc&sup2;/2</code> never changes; the total momentum is <code>mc &sum; e<sub>k</sub></code> over the direction labels
+of all walkers. Entropy is the same in both: the Shannon entropy of the occupancy histogram of the projected positions on
+a coarse grid, which rises from a concentrated start towards ln(bins) for a uniform occupancy.</p>
+<p><strong>What happens when graph particles collide?</strong> Random hop: nothing. The rule's pattern contains a single
+walker, so two walkers on one site never see each other and pass straight through; this is right for independent
+Brownian particles. Lattice gas: the Collide rule <code>{w1,s,a}, {w2,s,b}, {s,c}, {s,d} &rarr; {w1,s,c}, {w2,s,d},
+{s,c}, {s,d}</code> fires when two walkers on one site head in opposite directions and the perpendicular channels are
+free: the pair leaves at right angles. Momentum (a + b = 0 = c + d), energy and the exclusion principle (one walker per
+channel) are conserved. Walkers that cross, move in parallel or meet at right angles do not interact, exactly as in the
+HPP lattice gas; a walker heading into a wall self-loop is reflected and hands its momentum to the wall.</p>
+</div>

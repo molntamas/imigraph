@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
 from datetime import UTC, datetime
 from html import escape
 from importlib import resources
@@ -17,7 +18,7 @@ from typing import Any
 
 import numpy as np
 
-from imigraph.compare import ComparisonReport
+from imigraph.compare import CheckResult, ComparisonReport
 from imigraph.experiments import ExperimentConfig, ExperimentResult, run_experiment
 from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers_at_node
 from imigraph.report import svg
@@ -249,13 +250,18 @@ def _metric_charts(result: ExperimentResult) -> dict[str, str]:
     }
 
 
-def _checks_table(report: ComparisonReport) -> str:
+def _checks_table(report: ComparisonReport, informative: Sequence[CheckResult] = ()) -> str:
+    """``informative`` checks are listed after the real ones with the verdict ``info``: they are
+    reported for understanding but do not count (a lattice gas has no Maxwell distribution)."""
     rows = []
-    for check in report.results:
-        verdict = "pass" if check.passed else "FAIL"
+    for check, counts in [(c, True) for c in report.results] + [(c, False) for c in informative]:
+        if counts:
+            verdict, css = ("pass", "pass") if check.passed else ("FAIL", "fail")
+        else:
+            verdict, css = ("info: would pass" if check.passed else "info: would fail"), "muted"
         relation = "&gt;" if check.larger_is_better else "&le;"
         rows.append(
-            f'<tr><td><code>{escape(check.name)}</code></td><td class="{verdict.lower()}">{verdict}'
+            f'<tr><td><code>{escape(check.name)}</code></td><td class="{css}">{verdict}'
             f"</td><td>{check.value:.4g}</td><td>{relation} {check.threshold:.4g}</td>"
             f"<td>{escape(check.detail)}</td></tr>"
         )
@@ -338,6 +344,7 @@ def build_report(
     return template.substitute(
         css=_asset("report.css"),
         viz_js=_asset("viz.js"),
+        graph_model=_asset("graph-model.html"),
         generated=datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC"),
         reference_label=escape(report.reference_label),
         candidate_label=escape(report.candidate_label),

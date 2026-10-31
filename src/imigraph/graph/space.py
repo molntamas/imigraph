@@ -73,10 +73,13 @@ class SquareLattice:
 
     size: int
     spacing: float = 1.0
+    periodic: bool = False
 
     def __post_init__(self) -> None:
         if self.size < 1:
             raise ValueError("size must be >= 1")
+        if self.periodic and self.size < 3:
+            raise ValueError("a periodic lattice needs size >= 3 (distinct +x and -x neighbours)")
         if self.spacing <= 0:
             raise ValueError("spacing must be > 0")
 
@@ -109,13 +112,24 @@ class SquareLattice:
     def neighbors(self) -> np.ndarray:
         i, j = np.divmod(np.arange(self.num_nodes), self.size)
         last = self.size - 1
-        # Order: +i, -i, +j, -j. A missing neighbour at the boundary becomes a self-loop.
+        # Order (the direction label of the edge): +x, -x, +y, -y. A missing neighbour at the
+        # boundary becomes a self-loop, or wraps around on a periodic lattice.
+        if self.periodic:
+            up, down = (
+                (lambda v: np.where(v < last, v + 1, 0)),
+                (lambda v: np.where(v > 0, v - 1, last)),
+            )
+        else:
+            up, down = (
+                (lambda v: np.where(v < last, v + 1, v)),
+                (lambda v: np.where(v > 0, v - 1, v)),
+            )
         table = np.stack(
             [
-                np.where(i < last, i + 1, i) * self.size + j,
-                np.where(i > 0, i - 1, i) * self.size + j,
-                i * self.size + np.where(j < last, j + 1, j),
-                i * self.size + np.where(j > 0, j - 1, j),
+                up(i) * self.size + j,
+                down(i) * self.size + j,
+                i * self.size + up(j),
+                i * self.size + down(j),
             ],
             axis=1,
         )
