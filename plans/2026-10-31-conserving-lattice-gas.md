@@ -123,7 +123,20 @@ A "Graph model: questions and answers" card on both pages:
 ## Status
 
 - [x] plan written (2026-10-31)
-- [ ] lattice gas implemented and tested
-- [ ] experiment, CLI
-- [ ] page with the graph-model Q&A
-- [ ] published to imigraph-reports
+- [x] lattice gas implemented and tested (`graph/gas.py`, `tests/test_lattice_gas.py`, 9 tests;
+      the 40x40 default run takes 2.5 s together with the hard-disk gas)
+- [x] experiment, CLI (`run_gas_comparison`, `gas` / `gas-report` with `--lattice-*`)
+- [x] page with the graph-model Q&A (`output/gas_2026-10-31_201241_lattice-gas.html`; the Q&A
+      card is also on the Brownian page)
+- [x] published to imigraph-reports (2026-10-31)
+
+Results of the default run: energy drift exactly 0 (hard disks 6.7e-16), momentum bounded at
+0.50 of `sqrt(2 m E n)` (hard disks 0.57), 546 collisions (4.5 per walker), entropy 3.33 ->
+3.89 of 3.90 expected (hard disks 3.45 -> 3.87). Maxwell check of the lattice gas: p = 0
+(informative, single speed). Cross-comparison: occupancy p = 0.39 and marginals pass, MSD
+differs at early times as predicted.
+
+Lessons: the initial condition must not place a walker in a channel that points away from a
+wall (only Reflect can produce it, and Reflect streams the walker on in the same step), or
+the exclusion breaks in step 1. Two gases are compared at the same times only if
+`dt * record_every` matches `tau * lattice_record_every` exactly; `compare()` checks that.

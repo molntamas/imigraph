@@ -23,7 +23,24 @@ Two outputs share the same data and drawing code:
   Served by `docker compose up web` at http://localhost:8000.
 
 `imigraph.report.html.page_data()` and `fragments()` are the shared producers; `viz.js`
-(`Viewport`, `drawParticles`, `drawSpace`, `drawWalkers`, `Player`) is the shared consumer.
+(`Viewport`, `drawParticles`, `drawSpace`, `drawWalkers`, `drawArrows`, `drawCollisionMarks`,
+`drawRuleStep(vp, space, path, target, phase)`, `Player` with `setSpeed`, `speedControl`) is the
+shared consumer.
+
+- **Gas page** (`imigraph.report.gas`, template `assets/gas.html`, `python -m imigraph
+  gas-report`): hard-disk gas and lattice gas side by side, the lattice-gas rule demo
+  (`default_gas_demo`, arrows + collision rings), both check tables (`_checks_table(report,
+  informative)` lists non-counting checks as `info: would pass/fail`), the cross-comparison and
+  overlaid charts.
+- **Graph-model Q&A** (`assets/graph-model.html`) is inserted into both pages as `$graph_model`;
+  update it when the answers change (graph type, node types, how energy/momentum/entropy are
+  computed, what collisions do).
+- **Playground** (GUI only): `imigraph.report.live.playground(request)` runs a small world
+  with an editable `RuleSpec` and returns the demo (with matched chains), the rule description,
+  measured vs predicted drift/diffusion, or `{"error": message}` for an unsupported rule.
+  `web/app.js` keeps the presets, the editor (`editorSpec` / `fillEditor`), export (Blob
+  download `<name>.rule.json`) and import; "use in comparison run" writes the JSON into the
+  hidden `rule` field of the run form.
 
 ## Plots
 

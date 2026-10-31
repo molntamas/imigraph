@@ -13,15 +13,26 @@ whether the imitation holds. Read [docs/requirements.md](docs/requirements.md) f
 [docs/comparison-method.md](docs/comparison-method.md) for how the comparison works and how it
 is validated. Plans per issue live in [plans/](plans/).
 
+The second experiment: an energy-conserving hard-disk gas (the reference) next to a lattice gas
+on the same walker graph, whose rules (Collide, Reflect, Stream, the HPP model as edge
+rewrites) conserve mass, momentum and energy exactly and make walkers collide.
+
 ```bash
-docker compose run --rm dev uv run python -m imigraph report   # writes output/brownian_vs_graph_<time>.html
-docker compose up web                                           # live GUI at http://localhost:8000
+docker compose run --rm dev uv run python -m imigraph report       # writes output/brownian_vs_graph_<time>.html
+docker compose run --rm dev uv run python -m imigraph gas-report   # writes output/gas_<time>.html
+docker compose up web                                               # live GUI at http://localhost:8000
 ```
 
 Every run writes a new timestamped page and keeps the older ones; `output/index.html` lists
 them, newest first. Open the newest one in a browser: animations of the reference, of the graph
-step by step and of the projection, plus the comparison plots and verdict. The GUI runs the same
-Python package in the browser (Pyodide) with parameters of your choice.
+step by step and of the projection, the comparison plots and verdict, and a "questions and
+answers" card about the graph model (what kind of graph, node types, how energy, momentum and
+entropy are computed, what happens when particles collide). The GUI runs the same Python
+package in the browser (Pyodide): a *playground* with a small world (size, walkers, playback
+speed) and an editable rule (notation, direction weights, self-loops; presets; export and import
+as JSON; `python -m imigraph report --rule '<json>'` runs an exported rule), and the comparison
+run with parameters of your choice, including the edited rule. Published pages:
+[imigraph-reports](https://github.com/molntamas/imigraph-reports).
 
 ## Development in Docker (nothing installed on the host)
 

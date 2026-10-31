@@ -6,8 +6,11 @@ src/imigraph/
   reference/brownian.py    BrownianBox: the trusted reference system (Euler-Maruyama, reflecting walls)
   graph/space.py           Space protocol, SquareLattice (neighbour table + 2D coordinates)
   graph/state.py           WalkerGraph: space nodes + walker nodes, one anchoring edge per walker
-  graph/rules.py           Rule protocol, RandomHop ({w,s},{s,s'} -> {w,s'},{s,s'})
-  graph/simulation.py      GraphSimulation.run -> GraphHistory; GraphHistory.project -> Trajectory
+  graph/rules.py           Rule protocol, RandomHop ({w,s},{s,s'} -> {w,s'},{s,s'}), RuleSpec (rules as
+                           data: notation, JSON, validation, predicted drift/diffusion), ChainRule
+  graph/gas.py             LatticeGas: HPP rules Collide / Reflect / Stream on hyperedges {w,s,s'}
+  graph/simulation.py      GraphSimulation.run -> GraphHistory (optionally with matched chains);
+                           GraphHistory.project -> Trajectory
   compare/checks.py        MsdCheck, MarginalKsCheck, OccupancyCheck (Check protocol)
   compare/framework.py     compare(reference, candidate) -> ComparisonReport
   experiments/             ExperimentConfig + run_experiment: both systems from one config
@@ -103,8 +106,51 @@ step in which two disks overlap). `imigraph.experiments.gas` runs a free expansi
 half of the box and checks against kinetic theory: energy constant to rounding, momentum
 constant (periodic) or bounded (specular walls), final speeds Maxwell-Boltzmann (Rayleigh with
 `sigma^2 = E / (n m)`), occupancy entropy rising to the uniform value. Page:
-`python -m imigraph gas-report`. No graph imitation yet: the natural candidate is a lattice gas
-(HPP/FHP-style rules), which conserves mass, momentum and energy exactly by construction.
+`python -m imigraph gas-report`, which also runs the graph imitation below.
+
+## Graph system with conservation laws: the lattice gas (`imigraph.graph.gas`)
+
+The random hop has no velocity, so nothing is conserved from step to step and walkers never
+interact. The lattice gas gives a walker a heading: it is the ordered hyperedge `{w, s, s'}`
+(position `s`, heading `s'` along an edge with direction label `k` in `+x, -x, +y, -y`), so its
+velocity is `c e_k` with `c = a / tau` and its kinetic energy `m c^2 / 2` is fixed. At most one
+walker per channel `(s, k)` (exclusion). Every step applies, to all walkers at once:
+
+1. **Collide** `{w1,s,a}, {w2,s,b}, {s,c}, {s,d} -> {w1,s,c}, {w2,s,d}, {s,c}, {s,d}`: a head-on
+   pair whose perpendicular channels are empty real edges leaves at right angles (momentum
+   `a + b = 0 = c + d`, energy and exclusion conserved; which walker takes `c` is random).
+2. **Reflect** `{w,s,s} -> {w,s,s'}`: a walker heading into a wall self-loop turns round and
+   hands its momentum to the wall (specular wall). Never matches on a periodic lattice
+   (`SquareLattice(periodic=True)`), where the total momentum is then exact.
+3. **Stream** `{w,s,s'}_k, {s',s''}_k -> {w,s',s''}_k`: one edge per step, same label.
+
+This is the HPP lattice gas (Hardy, Pomeau, de Pazzis 1973) written as graph rewriting. The
+order Collide, Reflect, Stream together with the exclusion of channels that point away from a
+wall in the initial condition makes the synchronous update conflict-free (`tests/test_lattice_gas.py`
+checks the exclusion at every step). `LatticeGas.simulate` returns the same `GasRun` as the
+hard-disk gas, so the energy, momentum, entropy and Maxwell checks apply to both;
+`imigraph.experiments.gas.run_gas_comparison` runs both from the left half of the unit box at
+the same recording times and also runs `compare()` on the projected trajectories. Known
+limits, stated on the page: a single speed (no Maxwell-Boltzmann distribution, the check is
+reported as informative) and the anisotropy of the square lattice (FHP on a hexagonal lattice
+is the fix; `Space` is the seam).
+
+## Rules as data (`RuleSpec`, `ChainRule`)
+
+`RuleSpec` is a rule as plain data: `lhs` / `rhs` edge lists over variables (walkers are the
+variables starting with `w`), direction `weights` for `+x, -x, +y, -y`, and `self_loops`
+(`allow` / `forbid`). The text form `{w,s}, {s,t} -> {w,t}, {s,t}` is parsed and printed
+(`RuleSpec.parse`, `.notation`); the JSON form (`to_dict` / `from_dict`) is what the GUI
+exports and what `ExperimentConfig.rule` and `python -m imigraph report --rule '<json>'` take.
+The supported family is the *walker-anchored chain*: one walker edge `{w,s0}` and a chain of
+site edges `{s0,s1}, {s1,s2}, ...` on the left; the right side keeps the site edges (the space
+is static) and re-attaches the walker to a chain site. `chain()` validates this with a message
+for the editor. `ChainRule` applies a spec with numpy only (one weighted labelled edge per chain
+edge per walker) and can return the matched chains for the rule diagram
+(`GraphSimulation.run(record_paths=True)`). `RuleSpec.drift` and `.diffusion` give the
+predicted drift `hops a (w+x - w-x, w+y - w-y) / tau` and per-component diffusion
+`hops a^2 (w+ + w- - (w+ - w-)^2) / (2 tau)`; `tests/test_rules.py` checks them against runs.
+Rules with several walkers (interactions) are hand-written (`LatticeGas`), not yet editable.
 
 ## Extending
 

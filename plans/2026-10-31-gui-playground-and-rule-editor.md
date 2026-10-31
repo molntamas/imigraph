@@ -120,8 +120,17 @@ rule found in the GUI can be put into a timestamped page.
 ## Status
 
 - [x] plan written (2026-10-31)
-- [ ] RuleSpec / ChainRule
-- [ ] config, CLI, report
-- [ ] playground endpoint
-- [ ] GUI
-- [ ] verified headlessly, committed
+- [x] RuleSpec / ChainRule (`graph/rules.py`, `tests/test_rules.py`: round trip, six rejection
+      messages, RandomHop equivalence, biased double hop reproduces the predicted drift and
+      diffusion, self-loop exclusion, an edited rule with drift fails the comparison)
+- [x] config, CLI, report (`ExperimentConfig.rule`, `--rule '<json>'`, rules table shows the
+      spec's physics line, rule diagram draws the matched chain)
+- [x] playground endpoint (`report.live.playground`, limits size 3..25, walkers 1..50,
+      steps 1..300)
+- [x] GUI (`web/index.html`, `web/app.js`: presets RandomHop, DoubleHop, BiasedHop, NoStay,
+      LookAhead; notation, weights, self-loops; apply, export, import, use in comparison run;
+      playback speed sliders)
+- [x] verified headlessly (`docker/check-pages.py` exercises the playground), committed
+
+Deferred, as planned in section 4: interaction rules in the editor, growth rules, a drag-and-drop
+pattern editor, a Web Worker for the comparison run.

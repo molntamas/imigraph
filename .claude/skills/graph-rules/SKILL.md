@@ -50,8 +50,30 @@ The report draws the space from `GraphHistory.to_dict()` (`coordinates`, `edges`
 per frame); walker nodes are drawn next to their anchor with their edge (`viz.js`,
 `drawWalkers`). A new space needs nothing more as long as it provides coordinates.
 
+## Rules as data (editable in the GUI)
+
+- `RuleSpec` (`graph/rules.py`): notation `{w,s}, {s,t} -> {w,t}, {s,t}`, direction weights
+  `(+x, -x, +y, -y)`, `self_loops` `allow` / `forbid`; JSON via `to_dict` / `from_dict`. The
+  supported family is the walker-anchored chain (one walker edge, a chain of site edges, the
+  walker re-attached to a chain site, site edges unchanged); `chain()` raises a `ValueError`
+  whose message the editor shows. `ChainRule(spec)` runs it; `rule_from_spec(json)` is the
+  entry point used by `ExperimentConfig.rule`, the CLI `--rule` and `report.live.playground`.
+- Prediction before measurement: `spec.drift(a, tau)` and `spec.diffusion(a, tau)`; the
+  playground shows measured vs predicted. A new rule family needs the same: derive, then test.
+- Rule diagrams need the matched chains: `GraphSimulation.run(record_paths=True)` for rules
+  that implement `apply_with_paths`.
+
+## Conserving rules: the lattice gas (`graph/gas.py`)
+
+Walkers with a heading are hyperedges `{w, s, s'}` (`LatticeGasState`: `sites`,
+`directions`); rules Collide / Reflect / Stream (HPP) conserve momentum and energy and keep one
+walker per channel. When adding a conserving rule: state the conserved quantity in the
+docstring, keep the exclusion invariant (`tests/test_lattice_gas.py` checks it every step),
+return a `GasRun` so the gas checks apply, and describe the rules in `RULES` for the page.
+
 ## Next steps on the roadmap
 
 Growing spaces (rules that add nodes/edges), projections computed from the graph (spectral
-embedding), hypergraphs. Keep `Space` and `Rule` as the seams; do not special-case the lattice
-in the simulation loop.
+embedding), hypergraphs, FHP (hexagonal lattice) for an isotropic lattice gas, an editor for
+multi-walker (interaction) rules. Keep `Space` and `Rule` as the seams; do not special-case the
+lattice in the simulation loop.
