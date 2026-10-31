@@ -36,6 +36,12 @@ run on every commit. Code meant for the browser GUI runs on Pyodide (Python in W
    uv run ruff check .
    uv run ruff format --check .
    ```
+   If you changed anything a browser renders (`src/imigraph/report/`, `web/`), also generate the
+   pages and check them with the headless Chromium of this container:
+   ```bash
+   uv run python -m imigraph report --label <change> && uv run python -m imigraph gas-report --label <change>
+   uv run python docker/check-pages.py --serve      # fails on JavaScript errors or blank canvases
+   ```
 5. **Commit** with a conventional commit message that references `#{{ISSUE_NUMBER}}`, for example
    `feat(graph): add Laplacian diffusion step (#{{ISSUE_NUMBER}})`. Pre-commit hooks run
    automatically and must pass. Never use `--no-verify`. Never commit secrets or `.env` files.

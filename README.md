@@ -47,9 +47,13 @@ docker compose run --rm dev pre-commit run --all-files          # secret scan + 
 docker compose run --rm dev bash -c 'git add -A && git commit -m "..."'   # commit with hooks
 docker compose run --rm dev                                     # interactive shell
 docker compose --profile verify run --rm verify                 # headless browser check of the pages
+docker compose run --rm dev uv run python docker/check-pages.py --serve   # the same check, no second container
 ```
 
-Details and pitfalls (git hooks, line endings, verifying pages) are in the `docker-dev` skill.
+The image ships headless Chromium (playwright is a dev dependency), so the page check also
+works inside sandcastle sessions, which have no Docker: `uv run python docker/check-pages.py
+--serve`. Details and pitfalls (git hooks, line endings, verifying pages) are in the
+`docker-dev` skill.
 
 ### Without Docker
 

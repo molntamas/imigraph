@@ -23,6 +23,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       git curl jq ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
+# System libraries of headless Chromium (docker/check-pages.py verifies the generated pages and
+# the Pyodide GUI with Playwright). The browser itself is installed below, as the agent user,
+# in the version that matches the locked `playwright` package.
+ARG PLAYWRIGHT_VERSION=1.64.1
+RUN npx --yes "playwright@${PLAYWRIGHT_VERSION}" install-deps chromium \
+    && rm -rf /root/.npm /var/lib/apt/lists/*
+
 # GitHub CLI: the agent uses it to read issues, open pull requests, comment and relabel.
 RUN arch="$(dpkg --print-architecture)" \
     && curl -fsSL "https://github.com/cli/cli/releases/download/v${GH_VERSION}/gh_${GH_VERSION}_linux_${arch}.tar.gz" \
@@ -57,6 +64,10 @@ RUN curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" | sh && uv --vers
 # /home/agent/venv. The `uv sync --frozen` hook at sandbox start then only adds the project itself.
 COPY --chown=${AGENT_UID}:${AGENT_GID} pyproject.toml uv.lock .python-version /tmp/prewarm/
 RUN cd /tmp/prewarm && uv sync --frozen --no-install-project && rm -rf /tmp/prewarm
+
+# Headless Chromium for the locked playwright package (dev dependency group), into
+# /home/agent/.cache/ms-playwright. Rebuild after bumping playwright in uv.lock.
+RUN /home/agent/venv/bin/playwright install chromium
 
 # pre-commit, with the hook environments pre-warmed. betterleaks is built from source with a Go
 # toolchain that pre-commit downloads; doing it once here keeps the agent's first commit fast.

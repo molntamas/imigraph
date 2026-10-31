@@ -1,22 +1,55 @@
-"""Headless browser check of the generated report and the Pyodide GUI (runs in the Playwright
-container, see the `verify` service in compose.yaml).
+"""Headless browser check of the generated pages and the Pyodide GUI, with the Chromium that the
+sandcastle image ships (playwright is a dev dependency).
 
-    docker compose run --rm dev python -m imigraph report   # output/brownian_vs_graph_<time>.html
-    docker compose --profile verify run --rm verify         # this script
+    uv run python -m imigraph report                       # output/brownian_vs_graph_<time>.html
+    uv run python docker/check-pages.py --serve            # inside any container of the image
+    docker compose --profile verify run --rm verify        # from the host: the same, GUI served
+                                                           # by the `web` service
 
-It opens both pages in Chromium, fails on JavaScript errors, checks that the animations have
-frames and draw onto the canvases, runs the GUI once with small parameters, and saves screenshots
-to output/screenshots/.
+It opens the newest report and gas pages in Chromium, fails on JavaScript errors, checks that the
+animations have frames and draw onto the canvases, exercises the GUI playground and runs the
+comparison once with small parameters, and saves screenshots to output/screenshots/. With
+``--serve`` the script builds the wheel into web/dist and serves web/ itself on a free port
+(the GUI still loads Pyodide from the CDN, so it needs network access).
 """
 
 from __future__ import annotations
 
 import argparse
+import shutil
+import socket
+import subprocess
 import sys
+import threading
 import time
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
+
+
+def serve_gui(web: Path = Path("web")) -> str:
+    """Build the wheel and assets into ``web/dist`` (what docker/serve-web.sh does) and serve
+    ``web/`` from a daemon thread on a free port; returns the URL."""
+    dist = web / "dist"
+    shutil.rmtree(dist, ignore_errors=True)
+    subprocess.run(["uv", "build", "--wheel", "--out-dir", str(dist), "--quiet"], check=True)
+    assets = Path("src/imigraph/report/assets")
+    for name in ("viz.js", "report.css"):
+        shutil.copy(assets / name, dist / name)
+    wheel = next(dist.glob("imigraph-*.whl")).name
+    (dist / "wheel.txt").write_text(wheel + "\n", encoding="utf-8")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    handler = partial(SimpleHTTPRequestHandler, directory=str(web))
+    handler.log_message = lambda *args, **kwargs: None  # type: ignore[assignment]
+    server = ThreadingHTTPServer(("127.0.0.1", port), handler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    print(f"serving {web}/ (wheel {wheel}) at http://127.0.0.1:{port}/")
+    return f"http://127.0.0.1:{port}/"
+
 
 NONBLANK_PIXELS_JS = """(id) => {
   const canvas = document.getElementById(id);
@@ -194,8 +227,15 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("output/screenshots"))
     parser.add_argument("--timeout", type=int, default=300_000, help="GUI timeout in ms")
     parser.add_argument("--skip-gui", action="store_true")
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="build web/dist and serve web/ from this process instead of using --gui",
+    )
     args = parser.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.serve and not args.skip_gui:
+        args.gui = serve_gui()
     if args.report is None:
         candidates = sorted(Path("output").glob("brownian_vs_graph_*.html"))
         args.report = candidates[-1] if candidates else Path("output/brownian_vs_graph_none.html")

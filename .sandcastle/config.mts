@@ -37,7 +37,26 @@ export const LABELS = {
 } as const;
 
 // GH_REPO makes every gh command inside the container target this repository.
-export const sandbox = () => docker({ imageName: IMAGE_NAME, env: { GH_REPO: GITHUB_REPO } });
+// GIT_CONFIG_*: git settings for the container process only (nothing is written to the .git
+// directory, which the worktree shares with the host checkout):
+//   - safe.directory=*: the bind-mounted worktree belongs to another uid as far as git is
+//     concerned; sandcastle adds it to the global config, but betterleaks (pre-commit hook) runs
+//     git without the global config, so the environment form is needed too;
+//   - core.hooksPath=docker/git-hooks: commits run the LF hook of the repository instead of the
+//     hook a Windows host installed into the shared .git/hooks (CRLF, Windows interpreter path,
+//     cannot run on Linux).
+export const sandbox = () =>
+  docker({
+    imageName: IMAGE_NAME,
+    env: {
+      GH_REPO: GITHUB_REPO,
+      GIT_CONFIG_COUNT: "2",
+      GIT_CONFIG_KEY_0: "safe.directory",
+      GIT_CONFIG_VALUE_0: "*",
+      GIT_CONFIG_KEY_1: "core.hooksPath",
+      GIT_CONFIG_VALUE_1: "docker/git-hooks",
+    },
+  });
 
 export const hooks = {
   // git push/fetch authenticate with GH_TOKEN through a credential helper that reads the variable
@@ -49,10 +68,7 @@ export const hooks = {
   },
   // Project + any dependencies added since the image was built (the image pre-installs uv.lock).
   uvSync: { command: "uv sync --frozen", timeoutMs: 300_000 },
-  // The hook in .git/hooks is shared with all worktrees; install it if the host never did.
-  preCommit: {
-    command: `[ -f "$(git rev-parse --git-common-dir)/hooks/pre-commit" ] || pre-commit install`,
-  },
+  // Commit hooks need no installation: core.hooksPath (see sandbox()) points at docker/git-hooks.
 };
 
 // ---------- GitHub REST, host side ----------

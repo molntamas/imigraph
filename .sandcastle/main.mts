@@ -129,7 +129,7 @@ const workOnIssue = async (issue: Issue) => {
     // rerun continues where the last run stopped.
     branchStrategy: { type: "branch", branch, baseBranch: `origin/${BASE_BRANCH}` },
 
-    hooks: { sandbox: { onSandboxReady: [hooks.gitAuth, hooks.uvSync, hooks.preCommit] } },
+    hooks: { sandbox: { onSandboxReady: [hooks.gitAuth, hooks.uvSync] } },
 
     // Give up if the agent produces no output for 15 minutes.
     idleTimeoutSeconds: 900,

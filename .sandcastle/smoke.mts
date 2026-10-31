@@ -57,6 +57,14 @@ if (GH_TOKEN) {
     `uv run python -c "import sys, numpy, scipy, networkx; print('python', sys.version.split()[0], '| numpy', numpy.__version__, '| scipy', scipy.__version__, '| networkx', networkx.__version__)"`,
     "uv run pytest",
     "uv run ruff check . && uv run ruff format --check .",
+    // A commit inside the sandbox runs the pre-commit hooks through docker/git-hooks
+    // (core.hooksPath from the container environment, see config.mts); then undone.
+    "echo smoke > smoke.txt && git add smoke.txt && git commit -q -m 'smoke: hooks run in the sandbox' " +
+      "&& git log --oneline -1 && git reset -q --hard HEAD~1 && git status --short | head -3",
+    // The generated pages and the Pyodide GUI, checked with the headless Chromium of the image.
+    "uv run python -m imigraph report --out output/smoke-report.html > /dev/null && " +
+      "uv run python -m imigraph gas-report --out output/gas_smoke.html --steps 500 --lattice-steps 80 > /dev/null && " +
+      "uv run python docker/check-pages.py --report output/smoke-report.html --serve --out output/smoke-screenshots",
   ];
   if (GH_TOKEN) {
     checks.push(

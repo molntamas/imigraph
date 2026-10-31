@@ -61,9 +61,20 @@ docker compose run --rm -T dev bash -c 'git add -A && git commit -m "feat(x): ..
 
 ## Verifying pages
 
-After changing `imigraph.report`, `web/` or `viz.js`: regenerate the report, then run the
-`verify` profile. It opens both pages in headless Chromium (separate Playwright image, not part
-of the sandcastle image), fails on JavaScript errors or blank canvases, runs the GUI once and
-writes screenshots to `output/screenshots/`. Look at the screenshots. The `web` service keeps
-running after a `verify` run; `docker compose --profile verify down` stops it (needed to pick
-up changed static assets).
+After changing `imigraph.report`, `web/` or `viz.js`: regenerate the pages, then run the
+`verify` profile. It opens the newest pages in the headless Chromium of the image (playwright is
+a dev dependency, the browser is installed in `.sandcastle/Dockerfile`), fails on JavaScript
+errors or blank canvases, exercises the GUI playground, runs the comparison once and writes
+screenshots to `output/screenshots/`. Look at the screenshots. The `web` service keeps running
+after a `verify` run; `docker compose --profile verify down` stops it (needed to pick up changed
+static assets).
+
+Inside a sandcastle session (no Docker available) the same check runs in-process:
+
+```bash
+uv run python -m imigraph report --label <change> && uv run python -m imigraph gas-report --label <change>
+uv run python docker/check-pages.py --serve     # builds web/dist, serves web/ on a free port, checks everything
+```
+
+`npm run sandbox:smoke` (host) runs this plus a commit inside the sandbox; use it after changing
+`.sandcastle/` or the image.
