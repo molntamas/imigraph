@@ -5,6 +5,7 @@
  * only the keys listed in that file into the container.
  */
 import { docker } from "@ai-hero/sandcastle/sandboxes/docker";
+import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -45,10 +46,28 @@ export const LABELS = {
 //   - core.hooksPath=docker/git-hooks: commits run the LF hook of the repository instead of the
 //     hook a Windows host installed into the shared .git/hooks (CRLF, Windows interpreter path,
 //     cannot run on Linux).
+// Commit identity: sandcastle copies user.name/user.email into the container's global git
+// config, but a name with a space arrived empty there ("empty ident name" on commit, seen
+// 2026-10-31). The GIT_AUTHOR_* / GIT_COMMITTER_* variables need no quoting and take precedence.
+const hostGit = (key: string) => {
+  try {
+    return execFileSync("git", ["config", "--get", key], { encoding: "utf8" }).trim();
+  } catch {
+    return "";
+  }
+};
+const identity = () => {
+  const name = hostGit("user.name");
+  const email = hostGit("user.email");
+  if (!name || !email) return {};
+  return { GIT_AUTHOR_NAME: name, GIT_AUTHOR_EMAIL: email, GIT_COMMITTER_NAME: name, GIT_COMMITTER_EMAIL: email };
+};
+
 export const sandbox = () =>
   docker({
     imageName: IMAGE_NAME,
     env: {
+      ...identity(),
       GH_REPO: GITHUB_REPO,
       GIT_CONFIG_COUNT: "2",
       GIT_CONFIG_KEY_0: "safe.directory",

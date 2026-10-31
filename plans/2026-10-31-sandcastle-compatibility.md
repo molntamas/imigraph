@@ -48,9 +48,24 @@ Not covered by the smoke test, and known to be broken for an agent run:
 4. Optional, needs a working token: `npm run sandbox:smoke -- --claude` and one real issue with
    `npm run sandbox:run -- --issue <n>`.
 
+## 4. Findings during verification
+
+- First smoke run after the rebuild: the page check inside the sandbox works (report, gas page,
+  GUI playground and comparison run through the in-container Chromium, GUI served by
+  `--serve`). The commit check failed with `empty ident name (for <moln.tamas@gmail.com>)`:
+  sandcastle copies `user.name` and `user.email` from the host into the container's global git
+  config, but the name (which contains a space) arrived empty, while the email came from the
+  repository's own `.git/config`. Fix: `config.mts` reads both on the host and forwards them as
+  `GIT_AUTHOR_*` / `GIT_COMMITTER_*` environment variables, which need no quoting.
+- `git push --dry-run` still answers 403 (`Permission to molntamas/imigraph.git denied`): the
+  fine-grained token in `.sandcastle/.env` lacks *Contents: Read and write* or has expired.
+  Nothing in the repository can fix that; regenerate the token (README, section 1 of the
+  sandcastle guide) and rerun `npm run sandbox:smoke`.
+
 ## Status
 
 - [x] baseline measured
-- [ ] changes made
-- [ ] image rebuilt, smoke test green
+- [x] changes made (commit `1ff9a19` plus the identity fix)
+- [x] image rebuilt (4.0 GB with Chromium), smoke test: every check green except the push
+      dry-run (token permissions, see above)
 - [ ] merged to main
