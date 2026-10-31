@@ -154,7 +154,8 @@ $viz_js
   V.Player((data.rule.times.length - 1) * 4, function (f) {
     const step = Math.floor(f / 4), phase = f % 4;
     rule.clear();
-    V.drawRuleStep(rule, data.rule.space, data.rule.anchors[step][0], data.rule.anchors[step + 1][0], phase);
+    const path = data.rule.paths ? data.rule.paths[step][0] : [data.rule.anchors[step][0], data.rule.anchors[step + 1][0]];
+    V.drawRuleStep(rule, data.rule.space, path, data.rule.anchors[step + 1][0], phase);
     byId("rule-phase").textContent = V.RULE_PHASES[phase];
   }, { slider: byId("rule-slider"), button: byId("rule-play"), label: byId("rule-label"),
         labelFor: function (f) { return "step " + Math.floor(f / 4) + "." + (f % 4); }, interval: 700 });

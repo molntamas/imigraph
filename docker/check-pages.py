@@ -128,6 +128,38 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     goto_with_retries(page, url)
     page.wait_for_function("document.getElementById('run').disabled === false", timeout=timeout_ms)
     print(f"  python loaded: {page.text_content('#status')}")
+    # Playground: runs on load, then with a biased preset chosen from the editor.
+    page.wait_for_function(
+        "/^done/.test(document.getElementById('pg-status').textContent)", timeout=timeout_ms
+    )
+    assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
+    page.select_option("#pg-preset", "BiasedHop")
+    page.wait_for_function(
+        "/BiasedHop/.test(document.getElementById('pg-physics').textContent)", timeout=timeout_ms
+    )
+    physics = page.text_content("#pg-physics") or ""
+    assert "drift v = (0." in physics, physics
+    page.wait_for_timeout(300)
+    for canvas in ("pg-rule-canvas", "pg-demo-canvas"):
+        painted = page.evaluate(NONBLANK_PIXELS_JS, canvas)
+        assert painted > 500, f"{canvas} looks blank ({painted} painted pixels)"
+    assert page.locator("#pg-measured table tbody tr").count() == 5
+    page.fill("#pg-notation", "{s,t} -> {s,t}")
+    page.click("#pg-apply")
+    page.wait_for_function(
+        "document.getElementById('pg-error').textContent !== ''", timeout=timeout_ms
+    )
+    print(f"  playground rejects a bad rule: {page.text_content('#pg-error')}")
+    page.select_option("#pg-preset", "RandomHop")
+    page.wait_for_function(
+        "document.getElementById('pg-error').textContent === ''", timeout=timeout_ms
+    )
+    with page.expect_download() as download:
+        page.click("#pg-export")
+    assert download.value.suggested_filename == "RandomHop.rule.json"
+    print(f"  playground ok, export -> {download.value.suggested_filename}")
+    page.click("#pg-use")
+    assert page.input_value("#run-rule-json").startswith("{")
     page.fill("input[name=particles]", "400")
     page.fill("input[name=steps]", "1000")
     page.fill("input[name=record_every]", "50")

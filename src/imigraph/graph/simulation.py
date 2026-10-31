@@ -39,6 +39,10 @@ class GraphHistory:
     space: Space
     times: np.ndarray
     anchors: np.ndarray
+    paths: np.ndarray | None = None
+    """Matched chains per step when recorded: shape ``(T - 1, n, k + 1)``, ``paths[t, w]`` is
+    the chain of sites the rule matched for walker ``w`` in the step leading to frame ``t + 1``
+    (only for runs recorded at every step)."""
 
     def __post_init__(self) -> None:
         times = np.asarray(self.times, dtype=float)
@@ -47,6 +51,11 @@ class GraphHistory:
             raise ValueError("anchors must have shape (T, n) matching T times")
         object.__setattr__(self, "times", times)
         object.__setattr__(self, "anchors", anchors)
+        if self.paths is not None:
+            paths = np.asarray(self.paths, dtype=np.int64)
+            if paths.shape[:2] != (anchors.shape[0] - 1, anchors.shape[1]):
+                raise ValueError("paths must have shape (T - 1, n, k + 1)")
+            object.__setattr__(self, "paths", paths)
 
     @property
     def num_frames(self) -> int:
@@ -81,6 +90,7 @@ class GraphHistory:
         return {
             "times": self.times.tolist(),
             "anchors": self.anchors.tolist(),
+            "paths": None if self.paths is None else self.paths.tolist(),
             "space": {
                 "coordinates": self.space.coordinates.tolist(),
                 "edges": self.space.edges().tolist(),
@@ -108,22 +118,33 @@ class GraphSimulation:
         rng: np.random.Generator,
         record_every: int = 1,
         observer: StepObserver | None = None,
+        record_paths: bool = False,
     ) -> GraphHistory:
         """Apply the rule ``steps`` times, recording every ``record_every``-th state.
 
         ``observer(step, previous_positions, positions)`` is called after every step with the
-        projected positions (see :mod:`imigraph.metrics`).
+        projected positions (see :mod:`imigraph.metrics`). With ``record_paths`` (runs recorded
+        at every step, rules with ``apply_with_paths``) the matched chains are kept for the
+        rule diagram.
         """
         if initial.space != self.space:
             raise ValueError("initial state must live on the simulation's space")
         if steps < 0 or record_every < 1:
             raise ValueError("steps must be >= 0 and record_every >= 1")
+        with_paths = getattr(self.rule, "apply_with_paths", None)
+        if record_paths and (record_every != 1 or with_paths is None):
+            raise ValueError("paths can only be recorded at every step of a rule that reports them")
         frames = [initial.anchors]
+        paths = []
         state = initial
         coordinates = self.space.coordinates
         for step in range(1, steps + 1):
             previous = state
-            state = self.rule.apply(state, rng)
+            if record_paths:
+                state, path = with_paths(state, rng)
+                paths.append(path)
+            else:
+                state = self.rule.apply(state, rng)
             if observer is not None:
                 # A hop along a self-loop (walker stays) is the graph's wall interaction.
                 stayed = state.anchors == previous.anchors
@@ -131,4 +152,4 @@ class GraphSimulation:
             if step % record_every == 0:
                 frames.append(state.anchors)
         times = self.step_time * record_every * np.arange(len(frames))
-        return GraphHistory(self.space, times, np.stack(frames))
+        return GraphHistory(self.space, times, np.stack(frames), np.stack(paths) if paths else None)

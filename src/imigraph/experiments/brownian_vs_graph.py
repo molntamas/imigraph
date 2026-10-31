@@ -15,6 +15,7 @@ import numpy as np
 
 from imigraph.compare import ComparisonReport, compare
 from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers_at_node
+from imigraph.graph.rules import RuleSpec, rule_from_spec
 from imigraph.graph.simulation import lattice_hop_diffusion
 from imigraph.metrics import Metrics, StepObserver, compute_metrics
 from imigraph.reference import BrownianBox
@@ -33,6 +34,10 @@ class ExperimentConfig:
     record_every: int = 50
     seed: int = 0
     entropy_bins: int = 8
+    rule: dict[str, Any] | None = None
+    """A :class:`~imigraph.graph.rules.RuleSpec` as JSON; ``None`` runs :class:`RandomHop`.
+    The reference keeps ``D = a^2 / (4 tau)``, so a rule with another diffusion or a drift is
+    *meant* to fail the comparison: that is the experiment."""
 
     def __post_init__(self) -> None:
         if self.steps % self.record_every:
@@ -41,6 +46,8 @@ class ExperimentConfig:
             raise ValueError("at least two particles are needed for the statistics")
         if self.entropy_bins < 1:
             raise ValueError("entropy_bins must be >= 1")
+        if self.rule is not None:
+            RuleSpec.from_dict(self.rule)  # validate early, with the editor's error message
 
     @property
     def diffusion(self) -> float:
@@ -57,7 +64,11 @@ class ExperimentConfig:
 
     @property
     def graph_system(self) -> GraphSimulation:
-        return GraphSimulation(self.lattice, step_time=self.step_time)
+        return GraphSimulation(self.lattice, rule_from_spec(self.rule), step_time=self.step_time)
+
+    @property
+    def rule_name(self) -> str:
+        return "RandomHop" if self.rule is None else RuleSpec.from_dict(self.rule).name
 
     @property
     def total_time(self) -> float:
@@ -126,7 +137,11 @@ def run_experiment(config: ExperimentConfig | None = None) -> ExperimentResult:
         reference,
         projection,
         reference_label="Brownian motion in a box",
-        candidate_label="random hops on a lattice graph",
+        candidate_label=(
+            "random hops on a lattice graph"
+            if config.rule is None
+            else f"rule {config.rule_name} on a lattice graph"
+        ),
     )
     return ExperimentResult(
         config,

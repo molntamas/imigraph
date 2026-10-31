@@ -8,39 +8,113 @@
 <style>
   form.params { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px 16px; }
   form.params label { display: flex; flex-direction: column; font-size: 13px; color: var(--muted); }
-  form.params input { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
-  #status { font-variant-numeric: tabular-nums; }
+  form.params input, form.params select, form.params textarea { padding: 5px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; width: 100%; min-width: 0; box-sizing: border-box; }
+  form.params textarea { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; min-height: 3.2em; }
+  form.params .wide { grid-column: 1 / -1; }
+  .weights { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .weights label { font-size: 12px; min-width: 0; }
+  .weights input { width: 100%; min-width: 0; }
+  #status, #pg-status { font-variant-numeric: tabular-nums; }
   #results { display: none; }
+  .error { color: var(--fail); font-weight: 600; }
+  .buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
+  .buttons button { padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; }
+  .buttons button.primary { background: var(--reference); color: white; border-color: var(--reference); }
   pre#markdown { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; }
+  table.kv th { width: 55%; }
 </style>
 </head>
 <body>
 <main>
 <h1>imigraph live: Brownian motion in a box, imitated by a graph</h1>
 <p class="muted">The same Python package as the tests, running in your browser through Pyodide (Python 3.14 in
-WebAssembly). The first run downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.</p>
+WebAssembly). The first load downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.
+<span id="load-status"></span></p>
 
+<h2>1. Playground: a small world and an editable rule</h2>
+<div class="card">
+<p>Change the world, the number of walkers and the rule, then <em>Apply</em>: the rule diagram and the step-by-step
+animation are recomputed in Python at once, and the measured diffusion, drift and wall rate are compared with what the
+rule predicts. Rules are written in the notation of the report: a walker edge <code>{w,s}</code> plus a chain of site
+edges on the left, the walker re-attached to a site of the chain on the right. The direction weights apply to every
+chain edge (+x, &minus;x, +y, &minus;y); <em>self-loops</em> decides whether a walker at a wall may stay.</p>
+<form class="params" id="playground" onsubmit="return false;">
+  <label>world size (sites per side) <input name="size" type="number" value="7" min="3" max="25" step="1"></label>
+  <label>walkers <input name="walkers" type="number" value="4" min="1" max="50" step="1"></label>
+  <label>steps <input name="steps" type="number" value="40" min="1" max="300" step="1"></label>
+  <label>seed <input name="seed" type="number" value="1" step="1"></label>
+  <label>preset <select id="pg-preset">
+    <option value="RandomHop">RandomHop (uniform hop)</option>
+    <option value="DoubleHop">DoubleHop (two hops per step)</option>
+    <option value="BiasedHop">BiasedHop (drift to +x)</option>
+    <option value="NoStay">NoStay (walls never hold)</option>
+    <option value="LookAhead">LookAhead (chain of 2, move 1)</option>
+  </select></label>
+  <label>rule name <input id="pg-name" type="text" value="RandomHop"></label>
+  <label class="wide">rule (notation) <textarea id="pg-notation">{w,s}, {s,t} -> {w,t}, {s,t}</textarea></label>
+  <label class="wide">direction weights <div class="weights">
+    <label>+x <input id="pg-w0" type="number" value="0.25" min="0" step="0.05"></label>
+    <label>&minus;x <input id="pg-w1" type="number" value="0.25" min="0" step="0.05"></label>
+    <label>+y <input id="pg-w2" type="number" value="0.25" min="0" step="0.05"></label>
+    <label>&minus;y <input id="pg-w3" type="number" value="0.25" min="0" step="0.05"></label>
+  </div></label>
+  <label>self-loops (walls) <select id="pg-loops"><option value="allow">allow: a walker at the wall may stay</option><option value="forbid">forbid: it must move</option></select></label>
+  <label>playback speed <input id="pg-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="pg-speed-label" class="muted"></span></label>
+</form>
+<div class="buttons">
+  <button id="pg-apply" class="primary" disabled>Apply</button>
+  <button id="pg-export">Export rule JSON</button>
+  <button id="pg-import-button">Import rule JSON</button>
+  <input id="pg-import" type="file" accept=".json,application/json" style="display:none">
+  <button id="pg-use">Use this rule in the comparison run</button>
+  <span id="pg-status" class="muted"></span>
+</div>
+<p id="pg-error" class="error"></p>
+<p id="pg-physics"></p>
+<div class="row">
+<div>
+<p class="muted">The rule, one application in four phases (state, match, choose, rewrite) for walker 0.</p>
+<canvas id="pg-rule-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="pg-rule-play">Play</button><input id="pg-rule-slider" type="range"><span id="pg-rule-label" class="label"></span></div>
+<p id="pg-rule-phase" class="muted"></p>
+</div>
+<div>
+<p class="muted">The graph, step by step: all walkers on the small world.</p>
+<canvas id="pg-demo-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="pg-demo-play">Play</button><input id="pg-demo-slider" type="range"><span id="pg-demo-label" class="label"></span></div>
+<div id="pg-measured"></div>
+</div>
+</div>
+<div id="pg-rules-table"></div>
+</div>
+
+<h2>2. Comparison run: does the rule imitate Brownian motion?</h2>
 <div class="card">
 <form class="params" id="params" onsubmit="return false;">
   <label>particles <input name="particles" type="number" value="1000" min="2" step="1"></label>
   <label>steps <input name="steps" type="number" value="2000" min="1" step="1"></label>
   <label>record every <input name="record_every" type="number" value="50" min="1" step="1"></label>
-  <label>lattice size <input name="lattice_size" type="number" value="41" min="3" step="1"></label>
+  <label>lattice size (world) <input name="lattice_size" type="number" value="41" min="3" step="1"></label>
   <label>spacing a <input name="spacing" type="number" value="0.2" min="0.001" step="0.01"></label>
   <label>step time &tau; <input name="step_time" type="number" value="0.01" min="0.0001" step="0.001"></label>
   <label>seed <input name="seed" type="number" value="0" step="1"></label>
+  <label>rule <select id="run-rule"><option value="">RandomHop (default)</option><option value="custom">playground rule</option></select></label>
+  <input type="hidden" name="rule" id="run-rule-json" value="">
 </form>
 <div class="controls">
   <button id="run" disabled>Loading Python...</button>
   <span id="status" class="muted"></span>
+  <label class="muted">playback speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="speed-label"></span></label>
 </div>
-<p class="muted">D = a&sup2; / (4&tau;) for both systems. Smaller runs finish faster in the browser.</p>
+<p class="muted">The reference always runs with D = a&sup2; / (4&tau;), the value of the uniform random hop. A rule with a
+drift or a different number of hops is <em>supposed</em> to fail the checks; that is the experiment. Smaller runs finish
+faster in the browser.</p>
 </div>
 
 <div id="results">
 <p>Verdict of the comparison framework: <span id="verdict" class="badge"></span></p>
 
-<h2>1. Reference and graph projection, side by side</h2>
+<h3>2a. Reference and graph projection, side by side</h3>
 <div class="card">
 <div class="row">
 <div><p class="muted legend-ref">Brownian motion in a box</p><canvas id="pair-reference-canvas" width="520" height="520"></canvas></div>
@@ -49,14 +123,13 @@ WebAssembly). The first run downloads Pyodide, numpy and scipy (about 15 MB) and
 <div class="controls"><button id="pair-play">Play</button><input id="pair-slider" type="range"><span id="pair-label" class="label"></span></div>
 </div>
 
-<h2>2. The rule, explained</h2>
+<h3>2b. The rule of this run, explained</h3>
 <div class="card">
 <div class="row">
 <div>
 <p>The space is a lattice graph; boundary nodes keep self-loops for the neighbours they lack (the walls). Each particle is a
-walker node attached by one edge. The rule <code>{w,s}, {s,s'} &rarr; {w,s'}, {s,s'}</code> picks, for every walker at
-once, one of the four edges at its node uniformly at random and moves the walker edge along it; a self-loop means the
-walker stays. One application moves a walker by a or 0, so D = a&sup2; / (4&tau;).</p>
+walker node attached by one edge. The rule picks, for every walker at once, labelled edges from its node with the rule's
+direction weights and moves the walker edge along the chain; a self-loop means the walker stays.</p>
 <div id="rules-table"></div>
 </div>
 <div>
@@ -68,19 +141,19 @@ walker stays. One application moves a walker by a or 0, so D = a&sup2; / (4&tau;
 </div>
 </div>
 
-<h2>3. The graph, step by step (small instance)</h2>
+<h3>2c. The graph, step by step (small instance)</h3>
 <div class="card">
 <canvas id="demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
 </div>
 
-<h2>4. Comparison</h2>
+<h3>2d. Comparison</h3>
 <div class="card" id="checks-table"></div>
 <div class="card" id="msd-chart"></div>
 <div class="card"><div class="row"><div id="marginal-early"></div><div id="marginal-final"></div></div></div>
 <div class="card"><div class="row" id="occupancy-charts"></div></div>
 
-<h2>5. Energy, momentum, entropy, walls, spreading</h2>
+<h3>2e. Energy, momentum, entropy, walls, spreading</h3>
 <div class="card"><p class="muted">Energy and momentum are measured from every simulation step and averaged per recording
 interval; the ensemble values stay the same (temperature 2D/dt, momentum zero within its expected fluctuation) in both
 systems. The occupancy entropy rises towards ln(bins), on average but not monotonically.</p></div>

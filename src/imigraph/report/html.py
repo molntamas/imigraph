@@ -20,7 +20,14 @@ import numpy as np
 
 from imigraph.compare import CheckResult, ComparisonReport
 from imigraph.experiments import ExperimentConfig, ExperimentResult, run_experiment
-from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers_at_node
+from imigraph.graph import (
+    GraphHistory,
+    GraphSimulation,
+    RandomHop,
+    Rule,
+    SquareLattice,
+    walkers_at_node,
+)
 from imigraph.report import svg
 from imigraph.trajectory import Trajectory
 
@@ -59,6 +66,7 @@ def _demo_blob(demo: GraphHistory) -> dict[str, Any]:
     return {
         "times": _rounded(demo.times, 4),
         "anchors": demo.anchors.tolist(),
+        "paths": None if demo.paths is None else demo.paths.tolist(),
         "space": {
             "coordinates": _rounded(space.coordinates),
             "edges": space.edges().tolist(),
@@ -69,12 +77,21 @@ def _demo_blob(demo: GraphHistory) -> dict[str, Any]:
     }
 
 
-def default_rule_demo(spacing: float = 1.0, seed: int = 2, steps: int = 24) -> GraphHistory:
-    """One walker on a 5x5 lattice, recorded at every step, for the rule diagram."""
-    lattice = SquareLattice(5, spacing)
-    simulation = GraphSimulation(lattice, step_time=1.0)
-    initial = walkers_at_node(lattice, lattice.node_index(3, 2), 1)
-    return simulation.run(initial, steps, np.random.default_rng(seed))
+def default_rule_demo(
+    spacing: float = 1.0,
+    seed: int = 2,
+    steps: int = 24,
+    rule: Rule | None = None,
+    size: int = 5,
+    walkers: int = 1,
+) -> GraphHistory:
+    """One walker on a 5x5 lattice, recorded at every step with the matched chains, for the
+    rule diagram (``rule``, ``size`` and ``walkers`` are the playground's knobs)."""
+    lattice = SquareLattice(size, spacing)
+    simulation = GraphSimulation(lattice, rule or RandomHop(), step_time=1.0)
+    start = lattice.node_index(3, 2) if size == 5 else lattice.center_node
+    initial = walkers_at_node(lattice, start, walkers)
+    return simulation.run(initial, steps, np.random.default_rng(seed), record_paths=True)
 
 
 def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
@@ -84,7 +101,7 @@ def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
     if describe is None:
         keys = ("rewrite", "matches", "choice", "invariants", "physics")
         return [{"name": type(rule).__name__, **dict.fromkeys(keys, "")}]
-    return [describe()]
+    return [describe(result.config.spacing, result.config.step_time)]
 
 
 def _rules_table(rules: list[dict[str, str]]) -> str:

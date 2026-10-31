@@ -138,45 +138,61 @@
   // neighbour and is drawn as a small loop pointing out of the lattice in that direction.
   const LOOP_DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-  // One application of the RandomHop rule on a small space, in four phases:
-  // 0 state, 1 match (all edges {s,s'} at the anchor), 2 choose (one of them), 3 rewrite
-  // (the walker edge now ends at s'). `space` needs coordinates, edges, neighbors, spacing.
-  function drawRuleStep(vp, space, anchor, next, phase) {
+  // Draws the edge from site `from` to site `to` (a loop drawn beside the site when equal).
+  function strokeEdge(vp, coords, neighbors, spacing, from, to, color, width) {
     const ctx = vp.ctx;
+    const s = coords[from];
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    if (from === to) {
+      const k = Math.max(0, neighbors[from].indexOf(from));
+      const d = LOOP_DIRECTIONS[k];
+      ctx.arc(vp.x(s[0] + 0.28 * spacing * d[0]), vp.y(s[1] + 0.28 * spacing * d[1]),
+              0.18 * spacing * vp.scale, 0, 2 * Math.PI);
+    } else {
+      const t = coords[to];
+      ctx.moveTo(vp.x(s[0]), vp.y(s[1]));
+      ctx.lineTo(vp.x(t[0]), vp.y(t[1]));
+    }
+    ctx.stroke();
+  }
+
+  // One application of a chain rule on a small space, in four phases: 0 state, 1 match (every
+  // labelled edge at the anchor is a candidate for the first chain edge, yellow), 2 choose (the
+  // matched chain, orange), 3 rewrite (the walker edge now ends at the chain's target site).
+  // `path` is the matched chain [s0, s1, ..., sk]; `target` the walker's new site.
+  // `space` needs coordinates, edges, neighbors, spacing.
+  function drawRuleStep(vp, space, path, target, phase) {
     const coords = space.coordinates;
     const spacing = space.spacing;
-    drawSpace(vp, coords, space.edges, Math.max(4, 0.1 * spacing * vp.scale));
-    const s = coords[anchor];
-    const nbrs = space.neighbors[anchor];
-    if (phase === 1 || phase === 2) {
-      for (let k = 0; k < nbrs.length; k++) {
-        const chosen = nbrs[k] === next && (phase === 2);
-        if (phase === 2 && !chosen) continue;
-        ctx.strokeStyle = chosen ? "#f59e0b" : "#fbbf24";
-        ctx.lineWidth = chosen ? 5 : 4;
-        ctx.beginPath();
-        if (nbrs[k] === anchor) {
-          const d = LOOP_DIRECTIONS[k];
-          const cx = vp.x(s[0] + 0.28 * spacing * d[0]);
-          const cy = vp.y(s[1] + 0.28 * spacing * d[1]);
-          ctx.arc(cx, cy, 0.18 * spacing * vp.scale, 0, 2 * Math.PI);
-        } else {
-          const t = coords[nbrs[k]];
-          ctx.moveTo(vp.x(s[0]), vp.y(s[1]));
-          ctx.lineTo(vp.x(t[0]), vp.y(t[1]));
+    const nbrs = space.neighbors;
+    drawSpace(vp, coords, space.edges, Math.max(4, 0.1 * spacing * vp.scale), 1.5 * spacing);
+    const anchor = path[0];
+    if (phase === 1) {
+      for (let k = 0; k < nbrs[anchor].length; k++) {
+        strokeEdge(vp, coords, nbrs, spacing, anchor, nbrs[anchor][k], "#fbbf24", 4);
+        if (nbrs[anchor][k] === anchor) {  // loops: draw at their own direction
+          const d = LOOP_DIRECTIONS[k], s = coords[anchor], ctx = vp.ctx;
+          ctx.beginPath();
+          ctx.arc(vp.x(s[0] + 0.28 * spacing * d[0]), vp.y(s[1] + 0.28 * spacing * d[1]),
+                  0.18 * spacing * vp.scale, 0, 2 * Math.PI);
+          ctx.stroke();
         }
-        ctx.stroke();
-        if (phase === 2 && chosen) break;
+      }
+    } else if (phase === 2) {
+      for (let i = 1; i < path.length; i++) {
+        strokeEdge(vp, coords, nbrs, spacing, path[i - 1], path[i], "#f59e0b", 5);
       }
     }
-    drawWalkers(vp, coords, [phase === 3 ? next : anchor], spacing);
+    drawWalkers(vp, coords, [phase === 3 ? target : anchor], spacing);
   }
 
   const RULE_PHASES = [
     "state: walker w (red) is anchored at space node s by one edge",
-    "match: every edge {s,s'} at s matches the pattern {w,s},{s,s'} (yellow); a self-loop counts",
-    "choose: one match is picked uniformly at random (orange)",
-    "rewrite: {w,s} is replaced by {w,s'}; the space edge stays",
+    "match: every labelled edge at s is a candidate for the first chain edge (yellow); a self-loop counts",
+    "choose: the chain is drawn with the rule's direction weights (orange)",
+    "rewrite: {w,s} is replaced by the walker edge to the chain's target site; the space edges stay",
   ];
 
   // Plays frames 0..count-1, calling draw(frame) and keeping slider/label in sync.
