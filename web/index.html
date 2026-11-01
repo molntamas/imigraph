@@ -19,9 +19,27 @@
   .error { color: var(--fail); font-weight: 600; }
   .buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px 0; }
   .buttons button { padding: 5px 14px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer; }
+  .buttons button:disabled { opacity: 0.5; cursor: default; }
   .buttons button.primary { background: var(--reference); color: white; border-color: var(--reference); }
   pre#markdown { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; }
   table.kv th { width: 55%; }
+  /* rule list */
+  #pg-library tbody tr { cursor: pointer; }
+  #pg-library tbody tr.selected { background: #eff6ff; }
+  #pg-library tbody tr.invalid td.notation { color: var(--fail); }
+  #pg-library td.notation { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  #pg-library input[type="checkbox"] { width: 16px; height: 16px; }
+  /* graphical pattern editor */
+  .pattern-editor { display: grid; grid-template-columns: 1fr auto 1fr; gap: 6px; align-items: center; }
+  .pattern-editor svg { width: 100%; height: auto; border: 1px solid var(--border); border-radius: 6px; background: white; touch-action: manipulation; }
+  .pattern-editor .arrow { font-size: 24px; color: var(--muted); }
+  .pattern-editor .side-label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
+  .pattern-editor circle.node { cursor: pointer; }
+  .pattern-editor circle.picked { stroke: #f59e0b; stroke-width: 3; }
+  .pattern-editor line.edge, .pattern-editor circle.loop { cursor: pointer; }
+  .pattern-editor text { pointer-events: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  #pg-universe-canvas { cursor: crosshair; }
+  td svg.pattern { width: 326px; height: auto; }
 </style>
 </head>
 <body>
@@ -31,49 +49,93 @@
 WebAssembly). The first load downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.
 <span id="load-status"></span></p>
 
-<h2>1. Playground: a small world and an editable rule</h2>
+<h2>1. Playground: rules, a starting universe, a run</h2>
 <div class="card">
-<p>Change the world, the number of walkers and the rule, then <em>Apply</em>: the rule diagram and the step-by-step
-animation are recomputed in Python at once, and the measured diffusion, drift and wall rate are compared with what the
-rule predicts. Rules are written in the notation of the report: a walker edge <code>{w,s}</code> plus a chain of site
-edges on the left, the walker re-attached to a site of the chain on the right. The direction weights apply to every
-chain edge (+x, &minus;x, +y, &minus;y); <em>self-loops</em> decides whether a walker at a wall may stay.</p>
-<form class="params" id="playground" onsubmit="return false;">
-  <label>world size (sites per side) <input name="size" type="number" value="7" min="3" max="25" step="1"></label>
-  <label>walkers <input name="walkers" type="number" value="4" min="1" max="50" step="1"></label>
-  <label>steps <input name="steps" type="number" value="40" min="1" max="300" step="1"></label>
-  <label>seed <input name="seed" type="number" value="1" step="1"></label>
-  <label>preset <select id="pg-preset">
-    <option value="RandomHop">RandomHop (uniform hop)</option>
-    <option value="DoubleHop">DoubleHop (two hops per step)</option>
-    <option value="BiasedHop">BiasedHop (drift to +x)</option>
-    <option value="NoStay">NoStay (walls never hold)</option>
-    <option value="LookAhead">LookAhead (chain of 2, move 1)</option>
-  </select></label>
+<p>A <em>rule</em> is an edge rewrite: a walker edge <code>{w,s}</code> plus a chain of site edges on the left, the walker
+re-attached to a site of the chain on the right. Edit a rule in the drawing or in the text, both show the same rule.
+The rule set runs its ticked rules in order in every step. Choose the <em>starting universe</em> (world size, walls,
+where the walkers begin, by clicking sites if you like), then <em>Apply</em>: the run is recomputed in Python at once,
+and the measured diffusion, drift and wall rate are compared with what the rules predict. <em>Save result page</em>
+writes everything into one self-contained HTML file.</p>
+
+<h3>1a. Rules</h3>
+<div class="row">
+<div>
+<p class="muted">The rule set: ticked rules run in order in every step. Click a row to edit that rule.</p>
+<div class="table-scroll"><table id="pg-library"><thead><tr><th>run</th><th>name</th><th>rewrite</th><th>weights</th></tr></thead><tbody></tbody></table></div>
+<div class="buttons">
+  <button id="pg-new">New rule</button>
+  <button id="pg-duplicate">Duplicate</button>
+  <button id="pg-delete">Delete</button>
+  <button id="pg-up" title="earlier in the step">Move up</button>
+  <button id="pg-down" title="later in the step">Move down</button>
+  <button id="pg-reset">Reset to presets</button>
+</div>
+</div>
+<div>
+<p class="muted">Graphical editor of the selected rule. Click a node, then another node of the same side, to add or remove the edge
+between them (a walker keeps a single edge: connecting it elsewhere moves it). Click an edge to remove it. <em>+ site</em> /
+<em>+ walker</em> add a variable to both sides; double-click a node to rename it.</p>
+<div class="pattern-editor">
+  <div><span class="side-label">left side: the pattern to find</span><svg id="pg-lhs" viewBox="0 0 240 150"></svg></div>
+  <div class="arrow">&rarr;</div>
+  <div><span class="side-label">right side: what replaces it</span><svg id="pg-rhs" viewBox="0 0 240 150"></svg></div>
+</div>
+<div class="buttons">
+  <button id="pg-add-site">+ site</button>
+  <button id="pg-add-walker">+ walker</button>
+  <button id="pg-remove-node" disabled>Remove selected node</button>
+  <span id="pg-editor-hint" class="muted"></span>
+</div>
+</div>
+</div>
+<form class="params" id="rule-form" onsubmit="return false;">
   <label>rule name <input id="pg-name" type="text" value="RandomHop"></label>
-  <label class="wide">rule (notation) <textarea id="pg-notation">{w,s}, {s,t} -> {w,t}, {s,t}</textarea></label>
-  <label class="wide">direction weights <div class="weights">
+  <label>self-loops (walls) <select id="pg-loops"><option value="allow">allow: a walker at the wall may stay</option><option value="forbid">forbid: it must move</option></select></label>
+  <label class="wide">rule (text, the notation of the report) <textarea id="pg-notation">{w,s}, {s,t} -> {w,t}, {s,t}</textarea></label>
+  <label class="wide">direction weights of every chain edge <div class="weights">
     <label>+x <input id="pg-w0" type="number" value="0.25" min="0" step="0.05"></label>
     <label>&minus;x <input id="pg-w1" type="number" value="0.25" min="0" step="0.05"></label>
     <label>+y <input id="pg-w2" type="number" value="0.25" min="0" step="0.05"></label>
     <label>&minus;y <input id="pg-w3" type="number" value="0.25" min="0" step="0.05"></label>
   </div></label>
-  <label>self-loops (walls) <select id="pg-loops"><option value="allow">allow: a walker at the wall may stay</option><option value="forbid">forbid: it must move</option></select></label>
-  <label>playback speed <input id="pg-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="pg-speed-label" class="muted"></span></label>
 </form>
 <div class="buttons">
   <button id="pg-apply" class="primary" disabled>Apply</button>
   <button id="pg-export">Export rule JSON</button>
-  <button id="pg-import-button">Import rule JSON</button>
+  <button id="pg-export-all">Export rule set JSON</button>
+  <button id="pg-import-button">Import JSON</button>
   <input id="pg-import" type="file" accept=".json,application/json" style="display:none">
-  <button id="pg-use">Use this rule in the comparison run</button>
+  <button id="pg-use">Use the rule set in the comparison run</button>
   <span id="pg-status" class="muted"></span>
 </div>
 <p id="pg-error" class="error"></p>
 <p id="pg-physics"></p>
+
+<h3>1b. Starting universe and run</h3>
+<form class="params" id="playground" onsubmit="return false;">
+  <label>world size (sites per side) <input name="size" type="number" value="7" min="3" max="25" step="1"></label>
+  <label>walls <select name="walls"><option value="reflecting">reflecting (self-loops at the edge)</option><option value="periodic">periodic (wrap around)</option></select></label>
+  <label>walkers <input name="walkers" type="number" value="4" min="1" max="50" step="1"></label>
+  <label>placement <select name="placement">
+    <option value="center">all at the centre</option>
+    <option value="corner">all in a corner</option>
+    <option value="random">random sites</option>
+    <option value="left">random sites, left half</option>
+    <option value="sites">clicked sites</option>
+  </select></label>
+  <label>steps <input name="steps" type="number" value="40" min="1" max="300" step="1"></label>
+  <label>seed <input name="seed" type="number" value="1" step="1"></label>
+  <label>playback speed <input id="pg-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="pg-speed-label" class="muted"></span></label>
+</form>
 <div class="row">
 <div>
-<p class="muted">The rule, one application in four phases (state, match, choose, rewrite) for walker 0.</p>
+<p class="muted">The starting universe. Click a site to put a walker there, click it again to take one away.</p>
+<canvas id="pg-universe-canvas" width="400" height="400"></canvas>
+<p id="pg-universe-label" class="muted"></p>
+</div>
+<div>
+<p class="muted">The rule set, one step in four phases (state, match, choose, rewrite) for walker 0.</p>
 <canvas id="pg-rule-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="pg-rule-play">Play</button><input id="pg-rule-slider" type="range"><span id="pg-rule-label" class="label"></span></div>
 <p id="pg-rule-phase" class="muted"></p>
@@ -85,10 +147,16 @@ chain edge (+x, &minus;x, +y, &minus;y); <em>self-loops</em> decides whether a w
 <div id="pg-measured"></div>
 </div>
 </div>
+<div class="buttons">
+  <button id="pg-save" class="primary" disabled>Save result page</button>
+  <button id="pg-export-session">Export session JSON</button>
+  <span class="muted">The result page is a self-contained HTML file (rules, universe, the run, measured vs predicted);
+  the session JSON reproduces it with <code>python -m imigraph playground-report --request-file</code>.</span>
+</div>
 <div id="pg-rules-table"></div>
 </div>
 
-<h2>2. Comparison run: does the rule imitate Brownian motion?</h2>
+<h2>2. Comparison run: does the rule set imitate Brownian motion?</h2>
 <div class="card">
 <form class="params" id="params" onsubmit="return false;">
   <label>particles <input name="particles" type="number" value="1000" min="2" step="1"></label>
@@ -98,7 +166,7 @@ chain edge (+x, &minus;x, +y, &minus;y); <em>self-loops</em> decides whether a w
   <label>spacing a <input name="spacing" type="number" value="0.2" min="0.001" step="0.01"></label>
   <label>step time &tau; <input name="step_time" type="number" value="0.01" min="0.0001" step="0.001"></label>
   <label>seed <input name="seed" type="number" value="0" step="1"></label>
-  <label>rule <select id="run-rule"><option value="">RandomHop (default)</option><option value="custom">playground rule</option></select></label>
+  <label>rule <select id="run-rule"><option value="">RandomHop (default)</option><option value="custom">playground rule set</option></select></label>
   <input type="hidden" name="rule" id="run-rule-json" value="">
 </form>
 <div class="controls">

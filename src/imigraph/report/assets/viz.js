@@ -31,6 +31,16 @@
       scale: scale,
       x: function (v) { return offset[0] + (v - box.lower[0]) * scale; },
       y: function (v) { return canvas.height - offset[1] - (v - box.lower[1]) * scale; },
+      // Inverse maps (canvas pixels to box coordinates), for clicks on the canvas.
+      invX: function (px) { return box.lower[0] + (px - offset[0]) / scale; },
+      invY: function (py) { return box.lower[1] + (canvas.height - offset[1] - py) / scale; },
+      // Box coordinates of a mouse event on this canvas (CSS size may differ from the pixel size).
+      pointOf: function (event) {
+        const rect = canvas.getBoundingClientRect();
+        const px = (event.clientX - rect.left) * canvas.width / rect.width;
+        const py = (event.clientY - rect.top) * canvas.height / rect.height;
+        return [box.lower[0] + (px - offset[0]) / scale, box.lower[1] + (canvas.height - offset[1] - py) / scale];
+      },
       clear: function () {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.strokeStyle = COLORS.box;

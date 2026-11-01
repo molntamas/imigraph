@@ -11,7 +11,9 @@ Two kinds live here:
   the GUI): a walker-anchored *chain* pattern ``{w,s0}, {s0,s1}, ..., {s(k-1),sk}`` whose right
   side re-attaches the walker to one site of the chain. Each chain edge is matched by a random
   labelled edge (``+x, -x, +y, -y``) with the spec's weights, so the rule family covers the
-  uniform random hop, biased hops (drift), multi-hop steps and walks that never stay in place.
+  uniform random hop, biased hops (drift), multi-hop steps and walks that never stay in place;
+* :class:`RuleSequence`, several chain rules applied one after the other in every step (the
+  *rule set* of the GUI's rule editor); drifts and diffusions of the parts add up.
 """
 
 from __future__ import annotations
@@ -97,6 +99,10 @@ class RandomHop:
     @property
     def spec(self) -> RuleSpec:
         return RuleSpec.parse(self.rewrite, name=self.name)
+
+    @property
+    def specs(self) -> tuple[RuleSpec, ...]:
+        return (self.spec,)
 
     def apply(self, state: WalkerGraph, rng: np.random.Generator) -> WalkerGraph:
         neighbors = state.space.neighbors
@@ -347,6 +353,20 @@ class ChainRule:
     def describe(self, spacing: float = 1.0, step_time: float = 1.0) -> dict[str, str]:
         return self.spec.describe(spacing, step_time)
 
+    @property
+    def specs(self) -> tuple[RuleSpec, ...]:
+        return (self.spec,)
+
+    @property
+    def hops(self) -> int:
+        return self.spec.hops
+
+    def drift(self, spacing: float, step_time: float) -> np.ndarray:
+        return self.spec.drift(spacing, step_time)
+
+    def diffusion(self, spacing: float, step_time: float) -> np.ndarray:
+        return self.spec.diffusion(spacing, step_time)
+
     def apply_with_paths(
         self, state: WalkerGraph, rng: np.random.Generator
     ) -> tuple[WalkerGraph, np.ndarray]:
@@ -365,10 +385,103 @@ class ChainRule:
         return self.apply_with_paths(state, rng)[0]
 
 
-def rule_from_spec(spec: RuleSpec | dict[str, Any] | None) -> Rule:
-    """``None`` -> :class:`RandomHop`; a spec or its JSON form -> :class:`ChainRule`."""
+@dataclass(frozen=True)
+class RuleSequence:
+    """Several chain rules applied one after the other in every step, in the given order.
+
+    Every rule sees the state the previous one produced, so one step moves a walker along the
+    concatenated chains. Within a step the directions of the parts are drawn independently,
+    so far from the walls the drifts add and the per-component diffusions add:
+    ``v = sum v_i``, ``D = sum D_i`` (a sum of independent increments). ``hops`` is the total.
+    """
+
+    rules: tuple[ChainRule, ...]
+
+    def __post_init__(self) -> None:
+        if not self.rules:
+            raise ValueError("a rule sequence needs at least one rule")
+
+    @property
+    def name(self) -> str:
+        return " + ".join(rule.name for rule in self.rules)
+
+    @property
+    def specs(self) -> tuple[RuleSpec, ...]:
+        return tuple(rule.spec for rule in self.rules)
+
+    @property
+    def hops(self) -> int:
+        return sum(spec.hops for spec in self.specs)
+
+    def drift(self, spacing: float, step_time: float) -> np.ndarray:
+        return np.sum([s.drift(spacing, step_time) for s in self.specs], axis=0)
+
+    def diffusion(self, spacing: float, step_time: float) -> np.ndarray:
+        return np.sum([s.diffusion(spacing, step_time) for s in self.specs], axis=0)
+
+    def describe(self, spacing: float = 1.0, step_time: float = 1.0) -> dict[str, str]:
+        """The sequence as one rule: the rewrites joined by ``;``, the summed physics."""
+        drift = self.drift(spacing, step_time)
+        diffusion = self.diffusion(spacing, step_time)
+        names = ", ".join(rule.name for rule in self.rules)
+        return {
+            "name": self.name,
+            "rewrite": " ; ".join(spec.notation for spec in self.specs),
+            "matches": f"{len(self.rules)} rules applied in order in every step ({names}); "
+            "each one matches on the state the previous one produced",
+            "choice": "each rule draws its directions independently; all walkers rewritten "
+            "at once by every rule",
+            "invariants": "number of walkers, one anchoring edge per walker, the space graph",
+            "physics": f"{self.hops} hops per step in total; drifts and diffusions add up: "
+            f"D = ({diffusion[0]:.4g}, {diffusion[1]:.4g}), drift v = ({drift[0]:.4g}, "
+            f"{drift[1]:.4g}) for a = {spacing:g}, tau = {step_time:g}",
+        }
+
+    def descriptions(
+        self, spacing: float = 1.0, step_time: float = 1.0
+    ) -> list[dict[str, str]]:
+        """One description per rule, then the sequence as a whole."""
+        parts = [rule.describe(spacing, step_time) for rule in self.rules]
+        return [*parts, self.describe(spacing, step_time)]
+
+    def apply_with_paths(
+        self, state: WalkerGraph, rng: np.random.Generator
+    ) -> tuple[WalkerGraph, np.ndarray]:
+        """The new state and the concatenated matched chains, shape ``(n, 1 + sum k_i)``
+        (the joint site is not repeated when a rule ends on the last site of its chain)."""
+        pieces: list[np.ndarray] = []
+        for rule in self.rules:
+            state, path = rule.apply_with_paths(state, rng)
+            if pieces and np.array_equal(pieces[-1][:, -1], path[:, 0]):
+                path = path[:, 1:]
+            pieces.append(path)
+        return state, np.concatenate(pieces, axis=1)
+
+    def apply(self, state: WalkerGraph, rng: np.random.Generator) -> WalkerGraph:
+        return self.apply_with_paths(state, rng)[0]
+
+
+RuleData = RuleSpec | dict[str, Any] | list[Any] | tuple[Any, ...] | None
+
+
+def rule_specs(data: RuleData) -> tuple[RuleSpec, ...]:
+    """The specs of a rule given as data: ``None`` (the random hop), one spec or its JSON form,
+    or a list of them (a sequence). Raises ``ValueError`` with the editor's message."""
+    if data is None:
+        return (RANDOM_HOP,)
+    items = list(data) if isinstance(data, (list, tuple)) else [data]
+    if not items:
+        raise ValueError("enable at least one rule")
+    return tuple(
+        item if isinstance(item, RuleSpec) else RuleSpec.from_dict(item)
+        for item in items
+    )
+
+
+def rule_from_spec(spec: RuleData) -> Rule:
+    """``None`` -> :class:`RandomHop`; a spec or its JSON form -> :class:`ChainRule`; a list of
+    specs -> :class:`RuleSequence` (a single-element list is just its :class:`ChainRule`)."""
     if spec is None:
         return RandomHop()
-    if isinstance(spec, dict):
-        spec = RuleSpec.from_dict(spec)
-    return ChainRule(spec)
+    rules = tuple(ChainRule(s) for s in rule_specs(spec))
+    return rules[0] if len(rules) == 1 else RuleSequence(rules)

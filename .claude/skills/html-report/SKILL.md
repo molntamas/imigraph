@@ -35,12 +35,20 @@ shared consumer.
 - **Graph-model Q&A** (`assets/graph-model.html`) is inserted into both pages as `$graph_model`;
   update it when the answers change (graph type, node types, how energy/momentum/entropy are
   computed, what collisions do).
-- **Playground** (GUI only): `imigraph.report.live.playground(request)` runs a small world
-  with an editable `RuleSpec` and returns the demo (with matched chains), the rule description,
-  measured vs predicted drift/diffusion, or `{"error": message}` for an unsupported rule.
-  `web/app.js` keeps the presets, the editor (`editorSpec` / `fillEditor`), export (Blob
-  download `<name>.rule.json`) and import; "use in comparison run" writes the JSON into the
-  hidden `rule` field of the run form.
+- **Playground**: `imigraph.report.live.playground(request)` runs a small world from a
+  starting universe (`size`, `walls`, `walkers`, `placement`, `sites`) with a rule set (one
+  `RuleSpec` or a list) and returns the demo (with matched chains), the rule descriptions (each
+  with an SVG `pattern`), the resolved `universe`, measured vs predicted drift/diffusion, or
+  `{"error": message}` for an unsupported rule or universe. `web/app.js` keeps the rule list
+  (`library`, persisted in `localStorage`), the graphical editor (`pattern`, `renderPattern`,
+  `clickNode`; same layout as `svg.pattern_layout`), the text editor (`editorChanged`), the
+  universe canvas (`drawUniverse`), export / import (rule, rule set, session) and *Save result
+  page* (`live.playground_page_json`, a Blob download). "Use the rule set in the comparison
+  run" writes the JSON list into the hidden `rule` field of the run form.
+- **Playground page** (`imigraph.report.playground`, template `assets/playground.html`,
+  `python -m imigraph playground-report --request-file session.json`): rules table with
+  patterns, universe table and canvas, the two animations, measured vs predicted, the session
+  JSON. Written as `output/playground_<time>_<label>.html`, listed in the index like the others.
 
 ## Plots
 

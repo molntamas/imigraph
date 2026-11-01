@@ -77,3 +77,5 @@ svg.heatmap { width: 220px; height: 220px; }
   svg.heatmap { width: 150px; height: 150px; }
   pre { font-size: 11px; overflow-x: auto; }
 }
+svg.pattern { width: 326px; height: auto; vertical-align: middle; }
+td.pattern { min-width: 336px; }

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>imigraph playground: $title</title>
+<style>
+$css
+table.kv th { width: 55%; }
+pre.request { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; }
+</style>
+</head>
+<body>
+<main>
+<h1>imigraph playground: $title</h1>
+<p class="muted">Generated $generated with the rule editor of the imigraph GUI (or <code>python -m imigraph
+playground-report</code>). A small world, a starting universe and a set of $num_rules rule(s) applied in order in every
+step; the page keeps every state and every matched chain of the run, and compares what was measured with what the
+rules predict.</p>
+
+<h2>1. The rules</h2>
+<div class="card">
+<p>Each rule is an edge rewrite in the notation <code>{w,s}, {s,t} &rarr; {w,t}, {s,t}</code>: a walker edge plus a chain
+of site edges on the left, the walker re-attached to a site of the chain on the right. The pattern drawings show the
+variables as nodes (sites grey, walkers red) and the edges of each side. Direction weights (+x, &minus;x, +y, &minus;y)
+and the self-loop policy of every rule are in the <em>choice</em> and <em>matches</em> columns.</p>
+$rules_table
+</div>
+
+<h2>2. The starting universe</h2>
+<div class="card">
+<div class="row">
+<div>$universe_table</div>
+<div>
+<p class="muted">The world at step 0: space nodes (grey) with their edges, walkers (red) attached to their starting sites.</p>
+<canvas id="universe-canvas" width="400" height="400"></canvas>
+</div>
+</div>
+</div>
+
+<h2>3. The run</h2>
+<div class="card">
+<div class="row">
+<div>
+<p class="muted">The rule set, one application in four phases (state, match, choose, rewrite) for walker 0.</p>
+<canvas id="rule-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="rule-play">Play</button><input id="rule-slider" type="range"><span id="rule-label" class="label"></span></div>
+<p id="rule-phase" class="muted"></p>
+</div>
+<div>
+<p class="muted">The graph, step by step: all walkers on the small world.</p>
+<canvas id="demo-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
+<label class="muted">playback speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="speed-label"></span></label>
+</div>
+</div>
+</div>
+
+<h2>4. Measured against the prediction</h2>
+<div class="card">
+$measured_table
+<p class="muted">Few walkers and walls make the measured values noisy; the prediction holds far from the walls, for many
+walkers and many steps. A rule with a drift or more hops per step is meant to differ from the uniform random hop.</p>
+</div>
+
+<h2>5. Reproduce</h2>
+<div class="card">
+<p class="muted">The session as the GUI exports it. Save it as <code>session.json</code> and run
+<code>python -m imigraph playground-report --request-file session.json --label &lt;name&gt;</code>, or import it in the GUI.</p>
+<pre class="request">$request_json</pre>
+</div>
+</main>
+
+<script id="data" type="application/json">$data_json</script>
+<script>
+$viz_js
+</script>
+<script>
+(function () {
+  const data = JSON.parse(document.getElementById("data").textContent);
+  const V = window.imigraphViz;
+  const byId = function (id) { return document.getElementById(id); };
+  const demo = data.demo;
+  const players = [];
+
+  const universe = V.Viewport(byId("universe-canvas"), demo.space.box, 24);
+  universe.clear();
+  V.drawSpace(universe, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
+  V.drawWalkers(universe, demo.space.coordinates, demo.anchors[0], demo.space.spacing);
+
+  const rule = V.Viewport(byId("rule-canvas"), demo.space.box, 30);
+  const steps = demo.times.length - 1;
+  players.push(V.Player(steps * 4, function (f) {
+    const step = Math.floor(f / 4), phase = f % 4;
+    rule.clear();
+    V.drawRuleStep(rule, demo.space, demo.paths[step][0], demo.anchors[step + 1][0], phase);
+    byId("rule-phase").textContent = V.RULE_PHASES[phase];
+  }, { slider: byId("rule-slider"), button: byId("rule-play"), label: byId("rule-label"),
+       labelFor: function (f) { return "step " + Math.floor(f / 4) + "." + (f % 4); }, interval: 700 }));
+
+  const world = V.Viewport(byId("demo-canvas"), demo.space.box, 24);
+  players.push(V.Player(demo.times.length, function (f) {
+    world.clear();
+    V.drawSpace(world, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
+    V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+  }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
+       labelFor: function (f) { return "step " + f; }, interval: 500 }));
+  V.speedControl(byId("speed"), byId("speed-label"), players);
+})();
+</script>
+</body>
+</html>

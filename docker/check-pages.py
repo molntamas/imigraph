@@ -6,9 +6,10 @@ sandcastle image ships (playwright is a dev dependency).
     docker compose --profile verify run --rm verify        # from the host: the same, GUI served
                                                            # by the `web` service
 
-It opens the newest report and gas pages in Chromium, fails on JavaScript errors, checks that the
-animations have frames and draw onto the canvases, exercises the GUI playground and runs the
-comparison once with small parameters, and saves screenshots to output/screenshots/. With
+It opens the newest report, gas and playground pages in Chromium, fails on JavaScript errors,
+checks that the animations have frames and draw onto the canvases, exercises the GUI playground
+(rule list, graphical and text editor, the clickable universe, the saved result page) and runs
+the comparison once with small parameters, and saves screenshots to output/screenshots/. With
 ``--serve`` the script builds the wheel into web/dist and serves web/ itself on a free port
 (the GUI still loads Pyodide from the CDN, so it needs network access).
 """
@@ -93,6 +94,12 @@ def goto_with_retries(page: Page, url: str, attempts: int = 30) -> None:
             time.sleep(2)
 
 
+def painted(page: Page, canvas: str, minimum: int = 500) -> int:
+    count = page.evaluate(NONBLANK_PIXELS_JS, canvas)
+    assert count > minimum, f"{canvas} looks blank ({count} painted pixels)"
+    return count
+
+
 def check_report(page: Page, path: Path, out: Path) -> list[str]:
     print(f"report: {path}")
     errors = collect_errors(page)
@@ -115,9 +122,7 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
         "pair-reference-canvas",
         "pair-graph-canvas",
     ):
-        painted = page.evaluate(NONBLANK_PIXELS_JS, canvas)
-        assert painted > 500, f"{canvas} looks blank ({painted} painted pixels)"
-        print(f"  {canvas}: {painted} painted pixels")
+        print(f"  {canvas}: {painted(page, canvas)} painted pixels")
     for frame in (
         1,
         2,
@@ -136,6 +141,7 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
         "check table has fewer than 3 rows"
     )
     assert page.locator("svg").count() >= 4, "fewer than 4 SVG plots"
+    assert page.locator("svg.pattern").count() >= 1, "no rule pattern drawing"
     page.screenshot(path=str(out / "report.png"), full_page=True)
     check_phone_layout(page, out / "report-phone.png")
     return errors
@@ -164,9 +170,9 @@ def check_gas_report(page: Page, path: Path, out: Path) -> list[str]:
     assert frames > 1, f"gas-slider has {frames} frame(s)"
     page.click("#gas-play")
     page.wait_for_timeout(500)
-    painted = page.evaluate(NONBLANK_PIXELS_JS, "gas-canvas")
-    assert painted > 500, f"gas-canvas looks blank ({painted} painted pixels)"
-    print(f"  gas-canvas: {frames} frames, {painted} painted pixels")
+    print(
+        f"  gas-canvas: {frames} frames, {painted(page, 'gas-canvas')} painted pixels"
+    )
     assert page.locator("table tbody tr").count() >= 4, (
         "check table has fewer than 4 rows"
     )
@@ -176,50 +182,182 @@ def check_gas_report(page: Page, path: Path, out: Path) -> list[str]:
     return errors
 
 
+def check_playground_page(page: Page, path: Path, out: Path, tag: str) -> list[str]:
+    """A saved playground result page (from the CLI or from the GUI's *Save result page*)."""
+    print(f"playground page: {path}")
+    errors = collect_errors(page)
+    page.goto(path.resolve().as_uri(), wait_until="load")
+    for slider in ("rule-slider", "demo-slider"):
+        frames = page.eval_on_selector(f"#{slider}", "e => Number(e.max) + 1")
+        assert frames > 1, f"{slider} has {frames} frame(s)"
+        print(f"  {slider}: {frames} frames")
+    page.evaluate(
+        "() => { const s = document.getElementById('rule-slider'); s.value = 2;"
+        " s.dispatchEvent(new Event('input')); }"
+    )
+    page.wait_for_timeout(100)
+    for canvas in ("universe-canvas", "rule-canvas", "demo-canvas"):
+        print(f"  {canvas}: {painted(page, canvas)} painted pixels")
+    assert page.locator("svg.pattern").count() >= 1, "no rule pattern drawing"
+    assert page.locator("table").count() >= 3, "fewer than 3 tables"
+    assert page.locator("pre.request").count() == 1, "no session JSON to reproduce"
+    page.screenshot(path=str(out / f"playground-{tag}.png"), full_page=True)
+    check_phone_layout(page, out / f"playground-{tag}-phone.png")
+    return errors
+
+
+def wait_playground_done(page: Page, timeout_ms: int) -> None:
+    page.wait_for_function(
+        "/^(done|not run)/.test(document.getElementById('pg-status').textContent)",
+        timeout=timeout_ms,
+    )
+
+
+def wait_error(page: Page, present: bool, timeout_ms: int) -> str:
+    page.wait_for_function(
+        "(present) => (document.getElementById('pg-error').textContent !== '') === present",
+        arg=present,
+        timeout=timeout_ms,
+    )
+    return page.text_content("#pg-error") or ""
+
+
 def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     print(f"gui: {url}")
     errors = collect_errors(page)
     goto_with_retries(page, url)
+    page.evaluate("() => { try { localStorage.clear(); } catch (e) {} }")
+    page.reload(wait_until="load")
     page.wait_for_function(
         "document.getElementById('run').disabled === false", timeout=timeout_ms
     )
     print(f"  python loaded: {page.text_content('#status')}")
-    # Playground: runs on load, then with a biased preset chosen from the editor.
-    page.wait_for_function(
-        "/^done/.test(document.getElementById('pg-status').textContent)",
-        timeout=timeout_ms,
-    )
+    # Playground: runs on load with the preset rule set (RandomHop ticked).
+    wait_playground_done(page, timeout_ms)
     assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
-    page.select_option("#pg-preset", "BiasedHop")
+    assert page.locator("#pg-library tbody tr").count() == 5, "five preset rules"
+    assert page.locator("#pg-lhs circle.node").count() == 3, "w, s, t on the left"
+
+    # Rule list: tick BiasedHop, untick RandomHop -> the rule set is the biased hop.
+    page.click("#pg-library tr[data-name=BiasedHop] input.enabled")
+    page.click("#pg-library tr[data-name=RandomHop] input.enabled")
     page.wait_for_function(
-        "/BiasedHop/.test(document.getElementById('pg-physics').textContent)",
+        "/^BiasedHop/.test(document.getElementById('pg-physics').textContent)",
         timeout=timeout_ms,
     )
     physics = page.text_content("#pg-physics") or ""
     assert "drift v = (0." in physics, physics
     page.wait_for_timeout(300)
-    for canvas in ("pg-rule-canvas", "pg-demo-canvas"):
-        painted = page.evaluate(NONBLANK_PIXELS_JS, canvas)
-        assert painted > 500, f"{canvas} looks blank ({painted} painted pixels)"
-    assert page.locator("#pg-measured table tbody tr").count() == 5
+    for canvas in ("pg-rule-canvas", "pg-demo-canvas", "pg-universe-canvas"):
+        painted(page, canvas)
+    assert page.locator("#pg-measured table tbody tr").count() == 6
+    assert page.locator("#pg-rules-table svg.pattern").count() == 1
+
+    # Two rules ticked: a sequence, described as one rule plus its parts.
+    page.click("#pg-library tr[data-name=DoubleHop] input.enabled")
+    page.wait_for_function(
+        r"/^DoubleHop \+ BiasedHop/.test(document.getElementById('pg-physics').textContent)",
+        timeout=timeout_ms,
+    )
+    assert page.locator("#pg-rules-table tbody tr").count() == 3
+    assert "3 hops per step" in (page.text_content("#pg-physics") or "")
+    page.click("#pg-library tr[data-name=DoubleHop] input.enabled")
+    wait_playground_done(page, timeout_ms)
+
+    # Graphical editor on the selected (BiasedHop) rule: removing the site edge {s,t} on the
+    # left breaks the rule (the right side keeps it), adding it back repairs it.
+    page.click("#pg-library tr[data-name=BiasedHop] td.notation")
+    assert page.input_value("#pg-name") == "BiasedHop"
+    page.click("#pg-lhs circle[data-node=s]")
+    page.click("#pg-lhs circle[data-node=t]")
+    message = wait_error(page, True, timeout_ms)
+    assert "end on a site of the chain" in message, message
+    assert page.input_value("#pg-notation") == "{w,s} -> {w,t}, {s,t}"
+    page.click("#pg-lhs circle[data-node=s]")
+    page.click("#pg-lhs circle[data-node=t]")
+    wait_error(page, False, timeout_ms)
+    assert page.input_value("#pg-notation") == "{w,s}, {s,t} -> {w,t}, {s,t}"
+    # Add a site, connect it on both sides (a chain of two), then remove it again.
+    page.click("#pg-add-site")
+    page.click("#pg-lhs circle[data-node=t]")
+    page.click("#pg-rhs circle[data-node=u]")
+    page.click("#pg-rhs circle[data-node=t]")
+    page.click("#pg-apply")
+    wait_playground_done(page, timeout_ms)
+    assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
+    assert (
+        page.input_value("#pg-notation") == "{w,s}, {s,t}, {u,t} -> {w,t}, {s,t}, {u,t}"
+    )
+    assert "1 hop per application" in (page.text_content("#pg-physics") or "")
+    page.click("#pg-lhs circle[data-node=u]")
+    page.click("#pg-remove-node")
+    page.click("#pg-apply")
+    wait_playground_done(page, timeout_ms)
+    assert page.input_value("#pg-notation") == "{w,s}, {s,t} -> {w,t}, {s,t}"
+    print("  graphical editor ok")
+
+    # Text editor: a bad rule is rejected with a reason, a good one restores the drawing.
     page.fill("#pg-notation", "{s,t} -> {s,t}")
     page.click("#pg-apply")
-    page.wait_for_function(
-        "document.getElementById('pg-error').textContent !== ''", timeout=timeout_ms
+    message = wait_error(page, True, timeout_ms)
+    print(f"  playground rejects a bad rule: {message}")
+    page.fill("#pg-notation", "{w,s}, {s,t} -> {w,t}, {s,t}")
+    page.click("#pg-apply")
+    wait_error(page, False, timeout_ms)
+    assert page.locator("#pg-lhs circle.node").count() == 3
+
+    # New rule, delete it again.
+    page.click("#pg-new")
+    wait_playground_done(page, timeout_ms)
+    assert page.locator("#pg-library tbody tr").count() == 6
+    page.click("#pg-delete")
+    wait_playground_done(page, timeout_ms)
+    assert page.locator("#pg-library tbody tr").count() == 5
+
+    # Universe: periodic walls, then a walker placed by clicking the corner site (0, 0).
+    page.select_option("select[name=walls]", "periodic")
+    wait_playground_done(page, timeout_ms)
+    assert "wall rate" in (page.text_content("#pg-measured") or "")
+    canvas = page.locator("#pg-universe-canvas")
+    canvas.scroll_into_view_if_needed()
+    box = canvas.bounding_box()
+    assert box is not None
+    size = int(page.input_value("input[name=size]"))
+    scale = (400 - 40) / size  # Viewport(canvas 400px, margin 20) over size cells
+    px, py = 20 + 0.5 * scale, 400 - 20 - 0.5 * scale
+    page.mouse.click(
+        box["x"] + px * box["width"] / 400, box["y"] + py * box["height"] / 400
     )
-    print(f"  playground rejects a bad rule: {page.text_content('#pg-error')}")
-    page.select_option("#pg-preset", "RandomHop")
-    page.wait_for_function(
-        "document.getElementById('pg-error').textContent === ''", timeout=timeout_ms
+    wait_playground_done(page, timeout_ms)
+    assert page.input_value("select[name=placement]") == "sites"
+    label = page.text_content("#pg-universe-label") or ""
+    assert label.startswith("5 walkers"), label
+    print(f"  universe: {label}")
+
+    # Files: the result page, the session and the rule set.
+    with page.expect_download() as download:
+        page.click("#pg-save")
+    saved = download.value
+    assert saved.suggested_filename.startswith("playground_"), saved.suggested_filename
+    assert saved.suggested_filename.endswith("_BiasedHop.html"), (
+        saved.suggested_filename
     )
+    saved_path = out / "gui-saved-playground.html"
+    saved.save_as(str(saved_path))
+    print(f"  saved result page -> {saved.suggested_filename}")
+    with page.expect_download() as download:
+        page.click("#pg-export-session")
+    assert download.value.suggested_filename == "playground-session.json"
+    page.click("#pg-library tr[data-name=BiasedHop] td.notation")  # select it again
     with page.expect_download() as download:
         page.click("#pg-export")
-    assert download.value.suggested_filename == "RandomHop.rule.json"
-    print(f"  playground ok, export -> {download.value.suggested_filename}")
+    assert download.value.suggested_filename == "BiasedHop.rule.json"
     page.click("#pg-use")
-    assert page.input_value("#run-rule-json").startswith("{")
+    assert page.input_value("#run-rule-json").startswith("[{")
+    page.screenshot(path=str(out / "gui-playground.png"), full_page=False)
+
     page.fill("input[name=particles]", "400")
-    page.fill("input[name=steps]", "1000")
+    page.fill("#params input[name=steps]", "1000")
     page.fill("input[name=record_every]", "50")
     page.click("#run")
     page.wait_for_function(
@@ -231,13 +369,13 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     assert status.startswith("done"), status
     assert page.is_visible("#results"), "results are hidden"
     verdict = page.text_content("#verdict")
-    print(f"  verdict: {verdict}")
+    print(f"  verdict: {verdict} (a biased rule is meant to fail)")
     assert page.locator("#checks-table table tbody tr").count() == 3
     page.wait_for_timeout(400)
-    painted = page.evaluate(NONBLANK_PIXELS_JS, "pair-graph-canvas")
-    assert painted > 500, f"GUI canvas looks blank ({painted} painted pixels)"
+    painted(page, "pair-graph-canvas")
     page.screenshot(path=str(out / "gui.png"), full_page=True)
     check_phone_layout(page, out / "gui-phone.png")
+    errors += check_playground_page(page, saved_path, out, "gui")
     return errors
 
 
@@ -285,6 +423,12 @@ def main() -> int:
             if gas_pages:
                 page = browser.new_page(viewport={"width": 1200, "height": 900})
                 failures += check_gas_report(page, gas_pages[-1], args.out)
+            playground_pages = sorted(Path("output").glob("playground_*.html"))
+            if playground_pages:
+                page = browser.new_page(viewport={"width": 1200, "height": 900})
+                failures += check_playground_page(
+                    page, playground_pages[-1], args.out, "cli"
+                )
             if not args.skip_gui:
                 page = browser.new_page(viewport={"width": 1200, "height": 900})
                 failures += check_gui(page, args.gui, args.out, args.timeout)

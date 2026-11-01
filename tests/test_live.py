@@ -62,7 +62,7 @@ def test_playground_runs_an_edited_rule_and_reports_errors_instead_of_raising():
     )
     assert payload["error"] is None and payload["predicted"]["drift"][0] > 1.0
     assert len(payload["demo"]["paths"][0][0]) == 3
-    assert payload["spec"]["name"] == "Biased"
+    assert payload["specs"][0]["name"] == "Biased"
     bad = playground({"rule": {"notation": "{s,t} -> {s,t}"}})
     assert "walker edge" in bad["error"]
     assert (

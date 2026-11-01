@@ -4,10 +4,13 @@ python -m imigraph compare    [config options]           # Brownian vs graph, pr
 python -m imigraph report     [--out output] [--label x] # ... and write a new HTML page
 python -m imigraph gas        [config options]           # hard disks vs lattice gas: print checks
 python -m imigraph gas-report [--out output] [--label x] # ... and write a new HTML page
+python -m imigraph playground-report --request-file session.json [--out output] [--label x]
+                                                         # the result page of a playground session
 
 Lattice gas options carry the prefix ``--lattice-`` (``--lattice-size``, ``--lattice-boundary``).
-The graph rule of ``compare`` / ``report`` can be given as JSON: ``--rule '{...}'`` (see
-``imigraph.graph.rules.RuleSpec``).
+The graph rule of ``compare`` / ``report`` can be given as JSON: ``--rule '{...}'`` or a list
+``--rule '[{...}, {...}]'`` (see ``imigraph.graph.rules.RuleSpec`` and ``RuleSequence``). The
+playground request is the session JSON the GUI exports (rules, universe, steps, seed).
 """
 
 from __future__ import annotations
@@ -16,6 +19,7 @@ import argparse
 import json
 import sys
 from dataclasses import fields
+from pathlib import Path
 from typing import Any
 
 from imigraph.experiments import ExperimentConfig, run_experiment
@@ -68,6 +72,21 @@ def build_parser() -> argparse.ArgumentParser:
             add_config_options(sub, LatticeGasConfig, prefix="lattice-")
         else:
             add_config_options(sub, ExperimentConfig)
+    sub = commands.add_parser(
+        "playground-report",
+        help="small world with a rule set (a GUI session): write its result page",
+    )
+    add_output_options(sub)
+    source = sub.add_mutually_exclusive_group()
+    source.add_argument(
+        "--request", type=json.loads, default=None, help="playground request as JSON"
+    )
+    source.add_argument(
+        "--request-file",
+        type=Path,
+        default=None,
+        help="file with the request (the session JSON the GUI exports)",
+    )
     return parser
 
 
@@ -84,6 +103,26 @@ def config_from(
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "playground-report":
+        from imigraph.report.live import playground
+        from imigraph.report.playground import (
+            build_playground_page,
+            write_playground_page,
+        )
+
+        request = args.request or {}
+        if args.request_file is not None:
+            request = json.loads(args.request_file.read_text(encoding="utf-8"))
+        result = playground(request)
+        if result["error"]:
+            print(f"error: {result['error']}", file=sys.stderr)
+            return 2
+        build_playground_page(result, request)  # fail before writing anything
+        path = write_playground_page(args.out, request, label=args.label)
+        print(f"rules: {result['rule']['name']}")
+        print(f"physics: {result['rule']['physics']}")
+        print(f"\nWrote {path.resolve()}")
+        return 0
     if args.command.startswith("gas"):
         result = run_gas_comparison(
             config_from(args, GasConfig),
