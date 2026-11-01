@@ -57,9 +57,10 @@ shared consumer.
   collision sites with `drawCollisionMarks`. Hyperedge runs also return `captions` (one per
   frame from `world.explain_frames`: what Collide, Reflect and Stream did, the total momentum)
   shown under the step-by-step animation, and `headings` per walker may be given explicitly
-  for clicked sites. `live.collision_demo()` is the fixed 4x4 world of section 1c (two
-  walkers head-on, `COLLISION_DEMO`) with the explanation `assets/collision-demo.html`;
-  "Load this world into the playground" copies it into the form (`customHeadings`). `web/app.js` keeps the rule list
+  for clicked sites. Every view draws agents (walkers, balls, disks) with `viz.drawAgents`: one colour and
+  number per agent, an arrow for a heading or a velocity, a ring when marked; the playground
+  shows the graph and a 2D projection, the ball section the graph, the projection and the
+  reference. The worked collision example is the head-on preset of the ball section. `web/app.js` keeps the rule list
   (`library`, persisted in `localStorage`), the graphical editor (`pattern`, `renderPattern`,
   `clickNode`; same layout as `svg.pattern_layout`), the text editor (`editorChanged`), the
   universe canvas (`drawUniverse`), export / import (rule, rule set, session) and *Save result

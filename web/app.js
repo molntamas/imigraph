@@ -49,8 +49,6 @@
   let picked = null;         // {side: "lhs"|"rhs", name} of the node picked in the editor
   let customSites = null;    // walker sites chosen by clicking the universe canvas
   let customHeadings = null; // one heading per custom site (from the collision demo), or null
-  let demoPlayers = [];
-  let collisionDemoJson = null;
   let ballsJson = null;
   let ballPlayers = [];
   let lastResult = null;
@@ -469,8 +467,8 @@
     const hyper = form.walker_model.value === "hyperedge";
     const directions = hyper && lastResult && lastResult.universe && lastResult.universe.directions &&
       lastResult.universe.sites.length === sites.length && lastResult.universe.size === size ? lastResult.universe.directions : null;
-    if (directions) V.drawArrows(vp, geometry.coordinates, sites, directions, 1);
-    else V.drawWalkers(vp, geometry.coordinates, sites, 1);
+    V.drawAgents(vp, sites.map(function (s) { return geometry.coordinates[s]; }),
+                 { radius: 0.3, fanOut: true, directions: directions || null });
     byId("pg-universe-label").textContent = sites.length + (hyper ? " hyperedge" : " edge") + " walker" +
       (sites.length === 1 ? "" : "s") + " on a " + size + "×" + size + " world (" + form.walls.value + " walls, collisions: " +
       form.collisions.value + ")";
@@ -544,12 +542,18 @@
          labelFor: function (f) { return "step " + Math.floor(f / 4) + "." + (f % 4); }, interval: 700 }));
 
     const world = V.Viewport(byId("pg-demo-canvas"), demo.space.box, 24);
+    const projection = V.Viewport(byId("pg-projection-canvas"), demo.space.box, 24);
     playgroundPlayers.push(V.Player(demo.times.length, function (f) {
+      const positions = demo.anchors[f].map(function (s) { return demo.space.coordinates[s]; });
+      const marked = {};
+      if (demo.collisions && f > 0) demo.anchors[f - 1].forEach(function (site, w) { if (demo.collisions[f - 1].indexOf(site) >= 0) marked[w] = true; });
       world.clear();
       V.drawSpace(world, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-      if (demo.collisions && f > 0) V.drawCollisionMarks(world, demo.space.coordinates, demo.collisions[f - 1], demo.space.spacing);
-      if (demo.directions) V.drawArrows(world, demo.space.coordinates, demo.anchors[f], demo.directions[f], demo.space.spacing);
-      else V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+      V.drawAgents(world, positions, { radius: 0.3 * demo.space.spacing, fanOut: true, marked: marked,
+                                       directions: demo.directions ? demo.directions[f] : null });
+      projection.clear();
+      V.drawAgents(projection, positions, { radius: 0.45 * demo.space.spacing, alpha: 0.85, marked: marked,
+                                            directions: demo.directions ? demo.directions[f] : null });
       byId("pg-demo-caption").textContent = result.captions && result.captions.length ? result.captions[f] : "";
     }, { slider: byId("pg-demo-slider"), button: byId("pg-demo-play"), label: byId("pg-demo-label"),
          labelFor: function (f) { return "step " + f; }, interval: 500 }));
@@ -689,16 +693,6 @@
     return request;
   }
 
-  function drawArrow(ctx, x0, y0, x1, y1, color) {
-    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5;
-    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
-    const angle = Math.atan2(y1 - y0, x1 - x0);
-    ctx.beginPath(); ctx.moveTo(x1, y1);
-    ctx.lineTo(x1 - 8 * Math.cos(angle - 0.5), y1 - 8 * Math.sin(angle - 0.5));
-    ctx.lineTo(x1 - 8 * Math.cos(angle + 0.5), y1 - 8 * Math.sin(angle + 0.5));
-    ctx.closePath(); ctx.fill();
-  }
-
   function renderBalls(result) {
     ballPlayers.forEach(function (p) { p.pause(); });
     ballPlayers = [];
@@ -715,30 +709,19 @@
       const ctx = graph.ctx;
       const collided = {};
       if (f > 0) g.events[f - 1].forEach(function (e) { if (e.kind === "collision") e.balls.forEach(function (b) { collided[b] = true; }); });
-      for (let b = 0; b < g.sites[f].length; b++) {
-        ctx.fillStyle = V.COLORS.walker;
-        g.sites[f][b].forEach(function (site) {
-          const a = g.space.coordinates[site];
-          ctx.beginPath();
-          ctx.arc(graph.x(a[0]), graph.y(a[1]), Math.max(4, 0.3 * g.space.spacing * graph.scale), 0, 2 * Math.PI);
-          ctx.fill();
-        });
-        const c = g.centres[f][b], v = g.velocities[f][b], speed = Math.hypot(v[0], v[1]);
-        if (speed > 0) {
-          const len = (g.radius_cells + 0.9) * g.space.spacing;
-          drawArrow(ctx, graph.x(c[0]), graph.y(c[1]), graph.x(c[0] + len * v[0] / speed), graph.y(c[1] + len * v[1] / speed), "#374151");
-        }
-        if (collided[b]) {
-          ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.arc(graph.x(c[0]), graph.y(c[1]), (g.radius_cells + 0.8) * g.space.spacing * graph.scale, 0, 2 * Math.PI);
-          ctx.stroke();
-        }
+      const nodes = [], owners = [];
+      g.sites[f].forEach(function (sites, b) { sites.forEach(function (site) { nodes.push(g.space.coordinates[site]); owners.push(b); }); });
+      V.drawAgents(graph, nodes, { radius: 0.3 * g.space.spacing, indices: owners, numbers: g.sites[f][0].length === 1 });
+      if (g.sites[f][0].length > 1) {
+        ctx.fillStyle = "#111827"; ctx.font = "bold 12px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        g.centres[f].forEach(function (c, b) { ctx.fillText(String(b), graph.x(c[0]), graph.y(c[1])); });
       }
+      V.drawAgents(graph, g.centres[f], { radius: (g.radius_cells + 0.3) * g.space.spacing, alpha: 0, numbers: false,
+                                          velocities: g.velocities[f], marked: collided, arrowLength: 0.8 * g.space.spacing });
       projection.clear();
-      V.drawParticles(projection, g.centres[f], V.COLORS.candidate, diskRadius * projection.scale);
+      V.drawAgents(projection, g.centres[f], { radius: diskRadius, velocities: g.velocities[f], marked: collided, arrowLength: 0.5 * g.space.spacing });
       reference.clear();
-      V.drawParticles(reference, r.positions[f], V.COLORS.reference, diskRadius * reference.scale);
+      V.drawAgents(reference, r.positions[f], { radius: diskRadius, velocities: r.velocities[f], arrowLength: 0.5 * g.space.spacing });
       byId("bg-caption").textContent = g.captions.length ? g.captions[f] : "";
     }, { slider: byId("bg-slider"), button: byId("bg-play"), label: byId("bg-label"),
          labelFor: function (f) { return "step " + f + " (t = " + Number(g.times[f]).toFixed(3) + ")"; }, interval: 350 }));
@@ -780,46 +763,6 @@
         console.error(error);
       }
     }, 20);
-  }
-
-  // ---------- collision demo (section 1c) ----------
-
-  function renderCollisionDemo(demo) {
-    demoPlayers.forEach(function (p) { p.pause(); });
-    demoPlayers = [];
-    const result = demo.result;
-    byId("cd-docs").innerHTML = demo.docs;
-    if (result.error) { byId("cd-caption").textContent = "error: " + result.error; return; }
-    const d = result.demo;
-    const world = V.Viewport(byId("cd-canvas"), d.space.box, 30);
-    demoPlayers.push(V.Player(d.times.length, function (f) {
-      world.clear();
-      V.drawSpace(world, d.space.coordinates, d.space.edges, 5, 1.5 * d.space.spacing);
-      if (f > 0) V.drawCollisionMarks(world, d.space.coordinates, d.collisions[f - 1], d.space.spacing);
-      V.drawArrows(world, d.space.coordinates, d.anchors[f], d.directions[f], d.space.spacing);
-      byId("cd-caption").textContent = result.captions[f];
-    }, { slider: byId("cd-slider"), button: byId("cd-play"), label: byId("cd-label"),
-         labelFor: function (f) { return "step " + f; }, interval: 1500 }));
-    byId("cd-load").onclick = function () {
-      const request = demo.request;
-      library.forEach(function (r) { r.enabled = false; });
-      request.rule.forEach(function (spec) {
-        const existing = library.find(function (r) { return r.builtin && r.builtin === spec.builtin; });
-        if (existing) { existing.enabled = true; } else { library.push(freshRule(Object.assign({ enabled: true }, spec))); }
-      });
-      const form = byId("playground");
-      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions", "overlaps"].forEach(function (key) {
-        if (request[key] !== undefined && form.elements[key]) form.elements[key].value = request[key];
-      });
-      customSites = request.sites.slice();
-      customHeadings = request.headings.slice();
-      syncPlacement();
-      selectRule(library.find(function (r) { return r.enabled; }).id);
-      drawUniverse();
-      applyPlayground();
-      byId("cd-status").textContent = "loaded: the playground now runs this world (1b); change a heading or a site there";
-      byId("pg-demo-canvas").scrollIntoView({ behavior: "smooth", block: "center" });
-    };
   }
 
   // Accepts a single rule, a list of rules, or a session (rule list + universe, with the whole
@@ -985,7 +928,6 @@
     runJson = live.run_json;
     playgroundJson = live.playground_json;
     playgroundPageJson = live.playground_page_json;
-    collisionDemoJson = live.collision_demo_json;
     ballsJson = live.balls_json;
     byId("bg-run").disabled = false;
     status("ready (" + wheel + ")");
@@ -994,11 +936,7 @@
     byId("run").disabled = false;
     byId("pg-apply").disabled = false;
     applyPlayground();
-    setTimeout(function () {
-      try { renderCollisionDemo(JSON.parse(collisionDemoJson())); }
-      catch (error) { byId("cd-caption").textContent = "could not run the collision demo: " + error; console.error(error); }
-      runBalls();
-    }, 60);
+    setTimeout(runBalls, 60);
   }
 
   // ---------- wiring ----------

@@ -26,10 +26,19 @@ head-on.</td><td>momentum and energy, exactly</td></tr>
 <p>Under <em>exchange</em> and <em>swap</em> the hop that produced the contact is undone for both balls, so no two balls ever
 share a site, and the balls continue the step with their new velocities. Later, particles made of several nodes and
 edges may carry their own collision rules; the rule is a configuration of the gas for that reason.</p>
+<h3>Watch a collision</h3>
+<p>Choose the placement <em>two balls head-on</em>: ball 0 starts at the left wall with the largest speed, ball 1 at the
+right wall with speed 1, on the same row. Play step by step and read the caption: free flight, then the contact, where the
+x components are exchanged exactly (ball 0 leaves with speed 1, ball 1 with the larger speed, the total momentum unchanged),
+then the wall bounces, where a component flips and the total momentum changes. The reference on the right does the same
+in continuous space; the two stay in step until a lattice collision happens at a site rather than at the exact contact
+time. <em>Two balls at right angles</em> shows a diagonal hit: with speeds 1 and 1 the exchange is exact, change one speed
+to 2 and the swap fallback is taken and counted.</p>
 <h3>The reference: a hard-disk gas</h3>
 <p>The traditional simulation is the hard-disk gas of the gas report: disks in continuous space moving in straight
-lines, elastic collisions that exchange the velocity components along the line of centres, specular walls, integrated
-with a small time step. It starts <em>exactly</em> where the balls start, with the balls' velocities, with a disk covering
+lines, elastic collisions resolved at the exact time of impact (the disks are moved back to contact, the velocity
+components along the line of centres are exchanged, and they move on), specular walls, integrated with a small time
+step, so positions are continuous and no disk is ever pushed. It starts <em>exactly</em> where the balls start, with the balls' velocities, with a disk covering
 each ball's cells, and it is recorded at the lattice steps, so the 2D projection of the graph system (the ball centres)
 and the reference are compared frame by frame: the same energy and momentum bookkeeping, the same occupancy entropy,
 the same speed distribution, and the distribution checks of the comparison framework (mean squared displacement,

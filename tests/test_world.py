@@ -273,19 +273,30 @@ def test_momentum_and_energy_are_conserved_by_hpp_collisions():
     assert np.all(np.isclose(speeds[~wrapped], 1.0))
 
 
-def test_the_collision_demo_collides_in_step_two_and_explains_it():
-    from imigraph.report.live import COLLISION_DEMO, collision_demo
+COLLISION_DEMO = {
+    "rule": [REFLECT, STREAM],
+    "walker_model": "hyperedge",
+    "collisions": "hpp",
+    "size": 4,
+    "walls": "reflecting",
+    "placement": "sites",
+    "sites": [1, 9],
+    "headings": ["+x", "-x"],
+    "walkers": 2,
+    "steps": 6,
+    "seed": 1,
+}
 
-    demo = collision_demo()
-    result = demo["result"]
+
+def test_two_hyperedge_walkers_collide_in_step_two_and_the_captions_explain_it():
+    result = playground(COLLISION_DEMO)
     assert result["error"] is None, result["error"]
-    assert demo["request"]["sites"] == [1, 9] and "head-on" in demo["docs"]
     assert result["universe"]["headings"] == ["+x", "-x"]
     assert result["demo"]["anchors"][1] == [5, 5]  # step 1: both at (1,1)
     assert result["demo"]["collisions"][1] == [5]  # step 2: Collide at (1,1)
     assert sorted(result["demo"]["anchors"][2]) == [4, 6]
     captions = result["captions"]
-    assert len(captions) == COLLISION_DEMO["steps"] + 1
+    assert len(captions) == 7  # steps + 1
     assert captions[0].startswith("step 0: walker 0 at (0,1) heading +x")
     assert "Collide at (1,1)" in captions[2] and "perpendicular" in captions[2]
     assert "Reflect" in captions[3] and "Stream" in captions[1]
