@@ -32,7 +32,7 @@ def test_page_inlines_every_local_resource_and_the_wheel(wheel):
     assert 'src="app.js"' not in page
     assert "https://cdn.jsdelivr.net/pyodide/" in page  # only Pyodide stays remote
     assert "window.imigraphViz" in page  # viz.js
-    assert "imigraph.playground.v2" in page  # app.js
+    assert "imigraph.playground.v3" in page  # app.js
     assert "--border" in page  # report.css
     embedded = re.search(
         r'<script id="wheel" type="application/octet-stream" data-name="([^"]+)">'
@@ -44,7 +44,7 @@ def test_page_inlines_every_local_resource_and_the_wheel(wheel):
     assert embedded.group(1) == wheel.name
     assert base64.b64decode(embedded.group(2)) == WHEEL_BYTES
     # The embedded wheel comes before the app script that reads it.
-    assert page.index('id="wheel"') < page.index("imigraph.playground.v2")
+    assert page.index('id="wheel"') < page.index("imigraph.playground.v3")
 
 
 def test_a_script_that_would_close_the_tag_is_refused(tmp_path, wheel):

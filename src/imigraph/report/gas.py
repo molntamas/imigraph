@@ -19,7 +19,7 @@ from imigraph.experiments.gas import (
     LatticeGasConfig,
     run_gas_comparison,
 )
-from imigraph.graph.gas import DIRECTIONS, LatticeGas, LatticeGasState
+from imigraph.graph.gas import LatticeGas
 from imigraph.graph.space import SquareLattice
 from imigraph.report import svg
 from imigraph.report.html import (
@@ -50,13 +50,8 @@ def default_gas_demo(steps: int = 36, seed: int = 3) -> dict[str, Any]:
         lattice.node_index(6, 1),
     ]
     directions = [0, 1, 2, 3, 0, 1]
-    initial = LatticeGasState(lattice, np.array(sites), np.array(directions))
+    initial = gas.state(np.array(sites), np.array(directions))
     return gas.demo_dict(initial, steps, rng)
-
-
-def _directions_of(velocities: np.ndarray) -> np.ndarray:
-    """Direction label (0..3) of every recorded velocity, shape ``(T, n)``."""
-    return np.argmax(velocities @ DIRECTIONS.T, axis=2)
 
 
 def _system_blob(result: GasResult) -> dict[str, Any]:
@@ -75,7 +70,7 @@ def _system_blob(result: GasResult) -> dict[str, Any]:
         "sigma": run.thermal_sigma,
     }
     if isinstance(result.config, LatticeGasConfig):
-        blob["directions"] = _directions_of(run.velocities).tolist()
+        blob["velocities"] = _rounded(run.velocities, 4)
         blob["spacing"] = result.config.spacing
         blob["rules"] = list(result.rules)
     else:
@@ -100,8 +95,8 @@ def _config_table(config: GasConfig | LatticeGasConfig) -> str:
             "size": "lattice sites per side",
             "spacing": "lattice spacing a (= 1 / size)",
             "step_time": "step time tau (= a / speed)",
-            "particles": "walkers",
-            "channel_fraction": "occupied fraction of the 4 size^2 channels",
+            "particles": "balls",
+            "channel_fraction": "occupied fraction of the size^2 sites",
             "speed": "speed c = a / tau of every walker",
             "steps": "steps",
             "record_every": "record every (steps)",

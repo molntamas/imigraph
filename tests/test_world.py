@@ -1,55 +1,70 @@
-"""The unified walker system: both walker models, the exclusion update and HPP collisions."""
+"""The walker system: one kind of walker, rounds, rule sets of chain and ball rules."""
 
 import numpy as np
 import pytest
 
-from imigraph.graph import SquareLattice, WalkerGraph
-from imigraph.graph.gas import LatticeGas, LatticeGasState
-from imigraph.graph.rules import RANDOM_HOP, ChainRule, RuleSequence, RuleSpec
-from imigraph.graph.world import (
-    BuiltinRule,
-    WalkerSystem,
-    initial_headings,
-    resolve_exclusion,
-    rules_from_data,
+from imigraph.graph import SquareLattice, WalkerGraph, WalkerSystem
+from imigraph.graph.balls import place
+from imigraph.graph.rules import (
+    EXCHANGE,
+    KICK,
+    RANDOM_HOP,
+    REFLECT,
+    STREAM,
+    SWAP,
+    TURN,
+    BallRule,
+    ChainRule,
+    RuleSequence,
+    RuleSpec,
+    rule_item,
 )
+from imigraph.graph.world import rules_from_data
 from imigraph.report.live import playground
 
-STREAM = {"builtin": "stream", "description": "free flight"}
-REFLECT = {"builtin": "reflect"}
+STREAM_JSON = {
+    "name": "Stream",
+    "notation": STREAM.notation,
+    "description": "free flight",
+}
+REFLECT_JSON = {"name": "Reflect", "notation": REFLECT.notation}
 
 
-def _exclusion_holds(state: LatticeGasState) -> bool:
-    channels = state.sites * 4 + state.directions
-    return np.unique(channels).size == channels.size
+def _system(size, *specs, **options):
+    return WalkerSystem(
+        SquareLattice(size), tuple(rule_item(s) for s in specs), **options
+    )
 
 
-def test_rule_list_accepts_specs_and_builtins_with_descriptions():
+def test_rule_list_accepts_specs_with_descriptions_and_sorts_them_by_family():
     rules = rules_from_data(
         [
             {"name": "Hop", "notation": RANDOM_HOP.notation, "description": "random"},
-            STREAM,
+            STREAM_JSON,
         ]
     )
     assert isinstance(rules[0], ChainRule) and rules[0].spec.description == "random"
-    assert isinstance(rules[1], BuiltinRule) and rules[1].name == "Stream"
-    assert rules[1].to_dict()["description"] == "free flight"
+    assert isinstance(rules[1], BallRule) and rules[1].name == "Stream"
+    assert rules[1].spec.to_dict()["description"] == "free flight"
+    assert rules[1].spec.to_dict()["family"] == "ball"
     assert RuleSpec.from_dict(rules[0].spec.to_dict()).description == "random"
     with pytest.raises(ValueError, match="enable at least one rule"):
         rules_from_data([])
-    with pytest.raises(ValueError, match="builtin must be one of"):
-        rules_from_data([{"builtin": "explode"}])
+    with pytest.raises(ValueError, match="built-in rules are gone"):
+        rules_from_data([{"builtin": "stream"}])
+    system = WalkerSystem(SquareLattice(5), rules)
+    assert [r.name for r in system.round_rules] == ["Stream"]
+    assert [r.name for r in system.step_rules] == ["Hop"]
+    assert not system.interacting
 
 
-def test_edge_walkers_reproduce_the_rule_sequence():
+def test_resting_balls_under_chain_rules_reproduce_the_rule_sequence():
     lattice = SquareLattice(7)
     specs = (RANDOM_HOP, RuleSpec.parse("{w,s}, {s,t}, {t,u} -> {w,u}, {s,t}, {t,u}"))
     system = WalkerSystem(lattice, tuple(ChainRule(s) for s in specs))
     anchors = np.full(5, lattice.center_node)
-    history, blocked, waited = system.run(
-        system.initial_state(anchors, "random", np.random.default_rng(3)),
-        30,
-        np.random.default_rng(1),
+    history, waited = system.run(
+        system.initial_state(anchors), 30, np.random.default_rng(1)
     )
     assert waited == 0
     reference = RuleSequence(tuple(ChainRule(s) for s in specs))
@@ -60,149 +75,110 @@ def test_edge_walkers_reproduce_the_rule_sequence():
         state, path = reference.apply_with_paths(state, rng)
         np.testing.assert_array_equal(history.anchors[step], state.anchors)
         np.testing.assert_array_equal(history.paths[step - 1], path)
-    assert blocked == 0 and history.directions is None and history.collisions is None
-
-
-def test_edge_walkers_refuse_collisions_and_builtin_rules():
-    lattice = SquareLattice(5)
-    with pytest.raises(ValueError, match="hyperedge walkers"):
-        WalkerSystem(lattice, (ChainRule(RANDOM_HOP),), collisions="hpp")
-    with pytest.raises(ValueError, match="Stream works on hyperedge walkers"):
-        WalkerSystem(lattice, (ChainRule(RANDOM_HOP), BuiltinRule("stream")))
-    with pytest.raises(ValueError, match="walker model"):
-        WalkerSystem(lattice, (ChainRule(RANDOM_HOP),), walker_model="string")
-
-
-def test_initial_headings_respect_the_exclusion():
-    rng = np.random.default_rng(0)
-    sites = np.array([3, 3, 3, 3, 7])
-    directions = initial_headings(sites, "random", rng)
-    assert sorted(directions[:4]) == [0, 1, 2, 3]
-    assert initial_headings(np.array([1, 2]), "+y", rng).tolist() == [2, 2]
-    with pytest.raises(ValueError, match="at most 4 per site"):
-        initial_headings(np.zeros(5, dtype=int), "random", rng)
-    with pytest.raises(ValueError, match="same heading"):
-        initial_headings(np.array([1, 1]), "-x", rng)
-    with pytest.raises(ValueError, match="heading must be one of"):
-        initial_headings(sites, "north", rng)
-
-
-def test_exclusion_update_blocks_the_loser_and_keeps_one_walker_per_channel():
-    lattice = SquareLattice(5)
-    state = LatticeGasState(lattice, np.array([0, 1, 2]), np.array([0, 1, 1]))
-    # Walkers 0 and 1 both want channel (5, 0); walker 2 wants (1, 1), taken by walker 1.
-    new, blocked = resolve_exclusion(
-        state, np.array([5, 5, 1]), np.array([0, 0, 1]), np.random.default_rng(0)
+    assert history.velocities is None and not history.moving
+    assert history.collisions().sum() == 0 and history.captions()[1].endswith(
+        "walker(s) hopped"
     )
-    assert blocked.tolist() == [False, True, True] or blocked.tolist() == [
-        True,
-        False,
-        True,
+
+
+def test_a_step_takes_one_hop_per_round_and_the_budget_is_the_velocity():
+    system = _system(9, STREAM)
+    state = place(system.space, [[1, 1], [4, 4]], [[2, 1], [0, 0]])
+    after, path, events, waited = system.step(state, np.random.default_rng(0))
+    size = 9
+    assert (after.anchors[0] // size, after.anchors[0] % size) == (3, 2)
+    assert after.anchors[1] == state.anchors[1]  # at rest: no hops
+    assert path.shape == (2, 4)  # three rounds for the fast ball
+    assert path[1].tolist() == [state.anchors[1]] * 4
+    assert events == [] and not waited.any()
+    # Without Reflect a ball runs into the wall and stays there, hop by hop.
+    stuck = place(system.space, [[8, 4]], [[3, 0]])
+    after, path, _, _ = system.step(stuck, np.random.default_rng(0))
+    assert after.anchors[0] == stuck.anchors[0] and after.velocities.tolist() == [
+        [3, 0]
     ]
-    assert _exclusion_holds(new)
-    assert new.sites[~blocked].tolist() == [5] and new.sites[2] == 2
-    # A train: walker 1 moves into the channel walker 0 leaves, in the same step.
-    train = LatticeGasState(lattice, np.array([0, 5]), np.array([0, 0]))
-    moved, blocked = resolve_exclusion(
-        train, np.array([5, 10]), np.array([0, 0]), np.random.default_rng(0)
+
+
+def test_a_ball_redirected_by_one_collision_meets_a_third_in_the_same_round():
+    # Balls 0 and 1 fly at each other; Exchange turns ball 1 round, whose hop then meets
+    # ball 2 (at rest) in the same round: a second pass of Exchange hands the momentum on.
+    system = _system(9, REFLECT, EXCHANGE, SWAP, STREAM)
+    state = place(system.space, [[1, 4], [3, 4], [4, 4]], [[1, 0], [-1, 0], [0, 0]])
+    history, _ = system.run(state, 1, np.random.default_rng(0))
+    assert history.collisions().tolist() == [2]
+    assert history.velocities[1].tolist() == [[-1, 0], [0, 0], [1, 0]]
+    assert np.all(history.overlaps() == 0)
+    # A moving ball that hits a resting one hands over its velocity; the resting ball has no
+    # hops left in this step and moves on in the next.
+    state = place(system.space, [[1, 4], [3, 4], [4, 4]], [[1, 0], [0, 0], [0, 0]])
+    history, _ = system.run(state, 3, np.random.default_rng(0))
+    assert history.collisions().tolist() == [0, 1, 1]
+    assert history.velocities[-1].tolist() == [[0, 0], [0, 0], [1, 0]]
+    assert np.all(history.overlaps() == 0)
+
+
+def test_balls_that_share_a_site_ignore_each_other_until_they_separate():
+    system = _system(7, REFLECT, EXCHANGE, SWAP, STREAM)
+    centre = system.space.center_node
+    state = WalkerGraph(
+        system.space, np.array([centre, centre]), np.array([[1, 0], [-1, 0]])
     )
-    assert not blocked.any() and moved.sites.tolist() == [5, 10]
-    # A jam: walker 2 stays, walker 1 wants its channel, walker 0 wants walker 1's.
-    jam = LatticeGasState(lattice, np.array([0, 5, 10]), np.array([0, 0, 0]))
-    kept, blocked = resolve_exclusion(
-        jam, np.array([5, 10, 10]), np.array([0, 0, 0]), np.random.default_rng(0)
+    history, _ = system.run(state, 3, np.random.default_rng(0))
+    assert history.collisions().sum() == 0
+    assert history.anchors[1].tolist() == [centre + 7, centre - 7]
+
+
+def test_kick_sets_the_velocity_to_the_drawn_hop():
+    system = _system(7, KICK)
+    state = WalkerGraph(system.space, np.array([24, 24]), np.zeros((2, 2), dtype=int))
+    history, _ = system.run(state, 10, np.random.default_rng(2))
+    assert history.velocities is not None
+    for step in range(1, 11):
+        for b in range(2):
+            v = history.velocities[step, b]
+            assert np.abs(v).sum() == 1
+            moved = history.anchors[step, b] != history.anchors[step - 1, b]
+            label = int(np.argmax(np.array([[1, 0], [-1, 0], [0, 1], [0, -1]]) @ v))
+            target = system.space.neighbors[history.anchors[step - 1, b], label]
+            assert history.anchors[step, b] == target or not moved
+    # A kicked ball under Stream as well flies for a step and is kicked again: 2 hops/step.
+    both = _system(9, STREAM, KICK)
+    history, _ = both.run(
+        WalkerGraph(both.space, np.array([40]), np.array([[1, 0]])),
+        5,
+        np.random.default_rng(3),
     )
-    assert blocked.tolist() == [True, True, False]
-    assert kept.sites.tolist() == [0, 5, 10]
-    # A walker may always keep its channel; no clash means no randomness used.
-    rng = np.random.default_rng(0)
-    before = rng.bit_generator.state
-    _same, blocked = resolve_exclusion(state, state.sites, state.directions, rng)
-    assert not blocked.any() and rng.bit_generator.state == before
+    assert history.paths is not None and history.paths.shape[2] == 3
 
 
-@pytest.mark.parametrize("collisions", ["none", "hpp"])
-def test_hyperedge_chain_rules_keep_the_exclusion_at_high_density(collisions):
-    lattice = SquareLattice(4)
-    system = WalkerSystem(lattice, (ChainRule(RANDOM_HOP),), "hyperedge", collisions)
-    rng = np.random.default_rng(5)
-    anchors = np.repeat(np.arange(16), 3)  # 48 walkers on 16 sites: crowded
-    initial = system.initial_state(anchors, "random", rng)
-    assert isinstance(initial, LatticeGasState)
-    history, blocked, _waited = system.run(initial, 40, rng)
-    assert blocked > 0
-    assert history.directions is not None and history.directions.shape == (41, 48)
-    for frame in range(41):
-        state = LatticeGasState(
-            lattice, history.anchors[frame], history.directions[frame]
-        )
-        assert _exclusion_holds(state)
-    assert history.collisions is not None and len(history.collisions) == 40
-    if collisions == "hpp":
-        assert sum(len(s) for s in history.collisions) > 0
-
-
-def test_the_heading_follows_the_last_hop():
-    lattice = SquareLattice(9, periodic=True)
-    right = RuleSpec.parse(RANDOM_HOP.notation, name="Right", weights=(1, 0, 0, 0))
-    system = WalkerSystem(lattice, (ChainRule(right),), "hyperedge")
-    state = system.initial_state(
-        np.array([lattice.center_node]), "-y", np.random.default_rng(0)
-    )
-    assert isinstance(state, LatticeGasState) and state.directions.tolist() == [3]
-    new, _path, _collided, blocked, _waited = system.step(
-        state, np.random.default_rng(0)
-    )
-    assert isinstance(new, LatticeGasState)
-    assert new.directions.tolist() == [0] and blocked == 0
-    assert new.sites[0] == lattice.neighbors[lattice.center_node, 0]
-
-
-def test_stream_reflect_with_hpp_collisions_is_the_lattice_gas():
-    lattice = SquareLattice(8, spacing=0.5)
-    gas = LatticeGas(lattice, step_time=0.5)
-    initial = gas.initial_half_box(20, np.random.default_rng(2))
-    system = WalkerSystem(
-        lattice,
-        (BuiltinRule("reflect"), BuiltinRule("stream")),
-        "hyperedge",
-        "hpp",
-        0.5,
-    )
-    history, blocked, _waited = system.run(initial, 60, np.random.default_rng(7))
-    assert blocked == 0
-    assert history.directions is not None and history.collisions is not None
-    state = initial
-    rng = np.random.default_rng(7)
-    for step in range(1, 61):
-        state, collided = gas.step(state, rng)
-        np.testing.assert_array_equal(history.anchors[step], state.sites)
-        np.testing.assert_array_equal(history.directions[step], state.directions)
-        np.testing.assert_array_equal(
-            np.sort(history.collisions[step - 1]), np.sort(collided)
-        )
-    assert sum(len(s) for s in history.collisions) > 0
+def test_descriptions_list_every_rule_with_a_pattern_and_the_set():
+    system = _system(8, REFLECT, TURN, STREAM, step_time=0.5)
     described = system.descriptions(0.5, 0.5)
     assert [d["name"] for d in described] == [
-        "Collide",
         "Reflect",
+        "Turn",
         "Stream",
-        "Reflect + Stream",
+        "Reflect + Turn + Stream",
     ]
     assert all(d["pattern"].startswith("<svg") for d in described[:-1])
+    assert "HPP" in described[1]["physics"]
+    assert "round rules (Reflect, Turn, Stream)" in described[-1]["matches"]
+    assert system.interacting
 
 
-def test_playground_runs_every_model_and_documents_collisions():
-    edge = playground({"steps": 10, "walkers": 3})
-    assert edge["error"] is None
-    assert edge["model"] == {
-        "walker_model": "edge",
-        "collisions": "none",
-        "heading": None,
+def test_playground_runs_resting_moving_and_colliding_balls_and_documents_the_rules():
+    rest = playground({"steps": 10, "walkers": 3})
+    assert rest["error"] is None
+    assert rest["model"] == {
+        "velocity": "rest",
+        "max_speed": 2,
+        "radius": 0,
         "overlaps": "parallel",
+        "moving": False,
+        "interacting": False,
     }
-    assert edge["demo"]["directions"] is None and edge["measured"]["collisions"] is None
-    assert "exclusion principle" in edge["docs"] and "<h3>" in edge["docs"]
+    assert rest["demo"]["velocities"] is None and rest["measured"]["collisions"] == 0
+    assert "velocity lattice" in rest["docs"] and "<h3>" in rest["docs"]
 
     gas = playground(
         {
@@ -210,127 +186,113 @@ def test_playground_runs_every_model_and_documents_collisions():
             "walkers": 12,
             "placement": "left",
             "size": 6,
-            "walker_model": "hyperedge",
-            "collisions": "hpp",
-            "rule": [REFLECT, STREAM],
+            "velocity": "unit",
+            "rule": [
+                REFLECT_JSON,
+                {"name": "Turn", "notation": TURN.notation},
+                STREAM_JSON,
+            ],
         }
     )
     assert gas["error"] is None, gas["error"]
-    assert (
-        gas["rules"][0]["name"] == "Collide"
-        and gas["rules"][-1]["name"] == "Reflect + Stream"
-    )
+    assert [r["name"] for r in gas["rules"]] == [
+        "Reflect",
+        "Turn",
+        "Stream",
+        "Reflect + Turn + Stream",
+    ]
     assert gas["rules"][2]["description"] == "free flight"
-    assert len(gas["demo"]["directions"]) == 16 and len(gas["demo"]["collisions"]) == 15
-    assert gas["universe"]["directions"] == gas["demo"]["directions"][0]
-    assert gas["measured"]["blocked_rate"] >= 0 and gas["predicted"]["hops"] == 0
-    assert gas["specs"][1] == {
-        "name": "Stream",
-        "builtin": "stream",
-        "notation": "{w,s,s'}_k, {s',s''}_k -> {w,s',s''}_k",
-        "description": "free flight",
-    }
+    assert len(gas["demo"]["velocities"]) == 16 and len(gas["demo"]["events"]) == 15
+    assert gas["universe"]["velocities"] == gas["demo"]["velocities"][0]
+    assert all(abs(v[0]) + abs(v[1]) == 1 for v in gas["universe"]["velocities"])
+    assert gas["measured"]["energy_constant"] and gas["predicted"]["hops"] == 0
+    assert gas["specs"][2]["name"] == "Stream" and gas["specs"][2]["family"] == "ball"
+    assert gas["model"]["moving"] and gas["model"]["interacting"]
 
-    bad = playground({"collisions": "hpp"})
-    assert "hyperedge" in bad["error"]
-    crowded = playground(
-        {"walker_model": "hyperedge", "walkers": 5, "placement": "center"}
-    )
-    assert "at most 4 per site" in crowded["error"]
     mixed = playground(
         {
-            "walker_model": "hyperedge",
+            "velocity": "random",
+            "max_speed": 2,
             "walkers": 6,
             "placement": "random",
             "steps": 20,
-            "rule": [{"notation": RANDOM_HOP.notation, "name": "Hop"}, STREAM],
+            "rule": [{"notation": RANDOM_HOP.notation, "name": "Hop"}, STREAM_JSON],
         }
     )
     assert mixed["error"] is None and mixed["predicted"]["hops"] == 1
-    assert mixed["measured"]["blocked_rate"] >= 0
-
-
-def test_momentum_and_energy_are_conserved_by_hpp_collisions():
-    from imigraph.graph.world import momentum
-
-    lattice = SquareLattice(8, periodic=True)
-    system = WalkerSystem(lattice, (BuiltinRule("stream"),), "hyperedge", "hpp")
-    rng = np.random.default_rng(11)
-    anchors = rng.choice(lattice.num_nodes, size=30, replace=False)
-    history, blocked, _waited = system.run(
-        system.initial_state(anchors, "random", rng), 80, rng
+    assert mixed["measured"]["collisions"] == 0
+    bad = playground({"velocity": "warp"})
+    assert "velocity must be one of" in bad["error"]
+    assert (
+        "built-in rules are gone"
+        in playground({"rule": [{"builtin": "stream"}]})["error"]
     )
-    assert blocked == 0 and history.collisions is not None
-    assert sum(len(c) for c in history.collisions) > 0
-    total = momentum(history)
-    assert total is not None
-    np.testing.assert_array_equal(total, np.repeat(total[:1], 81, axis=0))
-    # Energy: every walker keeps its speed, so the kinetic energy is n m c^2 / 2 at all times.
-    speeds = np.linalg.norm(
-        np.diff(lattice.coordinates[history.anchors], axis=0), axis=2
-    )
-    wrapped = speeds > 1.5  # periodic wrap-around jumps
-    assert np.all(np.isclose(speeds[~wrapped], 1.0))
 
 
-COLLISION_DEMO = {
-    "rule": [REFLECT, STREAM],
-    "walker_model": "hyperedge",
-    "collisions": "hpp",
-    "size": 4,
+HEAD_ON = {
+    "rule": [
+        REFLECT_JSON,
+        {"name": "Exchange", "notation": EXCHANGE.notation},
+        STREAM_JSON,
+    ],
+    "size": 5,
     "walls": "reflecting",
     "placement": "sites",
-    "sites": [1, 9],
-    "headings": ["+x", "-x"],
+    "sites": [5, 15],
+    "velocities": [[1, 0], [-1, 0]],
     "walkers": 2,
     "steps": 6,
     "seed": 1,
 }
 
 
-def test_two_hyperedge_walkers_collide_in_step_two_and_the_captions_explain_it():
-    result = playground(COLLISION_DEMO)
+def test_two_balls_collide_in_step_two_and_the_captions_explain_it():
+    result = playground(HEAD_ON)
     assert result["error"] is None, result["error"]
-    assert result["universe"]["headings"] == ["+x", "-x"]
-    assert result["demo"]["anchors"][1] == [5, 5]  # step 1: both at (1,1)
-    assert result["demo"]["collisions"][1] == [5]  # step 2: Collide at (1,1)
-    assert sorted(result["demo"]["anchors"][2]) == [4, 6]
+    assert result["universe"]["velocities"] == [[1, 0], [-1, 0]]
+    assert result["model"]["velocity"] == "explicit"
+    anchors = result["demo"]["anchors"]
+    assert anchors[1] == [10, 10] or anchors[2] != anchors[1]
     captions = result["captions"]
     assert len(captions) == 7  # steps + 1
-    assert captions[0].startswith("step 0: walker 0 at (0,1) heading +x")
-    assert "Collide at (1,1)" in captions[2] and "perpendicular" in captions[2]
-    assert "Reflect" in captions[3] and "Stream" in captions[1]
+    assert captions[0].startswith("step 0: ball 0 at (1,0) with v = (1, 0)")
+    collided = [f for f in range(1, 7) if "Exchange" in captions[f]]
+    assert len(collided) >= 1, captions
+    first = collided[0]
+    assert "met along x" in captions[first]
+    assert result["demo"]["velocities"][first] == [[-1, 0], [1, 0]]
     assert all("total momentum" in c for c in captions)
-    assert result["measured"]["momentum_start"] == [0.0, 0.0]
-    assert result["demo"]["momentum"][2] == [0.0, 0.0]
-    # Momentum changes only at wall reflections (steps 3 and 4 here), never at collisions.
-    changes = [
-        f
-        for f in range(1, 7)
-        if result["demo"]["momentum"][f] != result["demo"]["momentum"][f - 1]
-    ]
-    assert changes == [3, 4, 6], changes
-    for f in range(1, 7):
-        assert ("Reflect" in captions[f]) == (f in changes), captions[f]
-        assert ("Collide" in captions[f]) == (f in (2, 5)), captions[f]
-    assert result["measured"]["momentum_changes"] == 3
+    assert result["measured"]["momentum_start"] == [0, 0]
+    assert result["measured"]["collisions_by_rule"]["Exchange"] >= 1
+    # Momentum changes only at wall reflections, never at collisions (two reflections in
+    # one step may cancel).
+    momenta = result["demo"]["momentum"]
+    changes = [f for f in range(1, 7) if momenta[f] != momenta[f - 1]]
+    assert all("Reflect" in captions[f] for f in changes)
+    assert any("Reflect" in c for c in captions) and momenta == [[0, 0]] * 7
+    assert result["measured"]["momentum_changes"] == len(changes)
+    assert result["measured"]["energy_constant"]
 
 
-def test_explicit_headings_are_validated():
-    base = {
-        "walker_model": "hyperedge",
-        "placement": "sites",
-        "sites": [1, 9],
-        "steps": 3,
-    }
-    assert "one heading per walker" in playground({**base, "headings": ["+x"]})["error"]
-    assert "+x, -x, +y or -y" in playground({**base, "headings": ["+x", "up"]})["error"]
+def test_explicit_velocities_and_placements_are_validated():
+    base = {"placement": "sites", "sites": [1, 9], "steps": 3}
     assert (
-        "exclusion"
-        in playground({**base, "sites": [1, 1], "headings": ["+x", "+x"]})["error"]
+        "one (vx, vy) per walker"
+        in playground({**base, "velocities": [[1, 0]]})["error"]
     )
-    ok = playground({**base, "headings": ["+y", "-y"]})
-    assert ok["error"] is None and ok["universe"]["headings"] == ["+y", "-y"]
+    assert "at most 4" in playground({**base, "velocities": [[9, 0], [0, 0]]})["error"]
+    ok = playground({**base, "velocities": [[0, 1], [0, -1]]})
+    assert ok["error"] is None and ok["universe"]["velocities"] == [[0, 1], [0, -1]]
+    head_on = playground(
+        {"placement": "head-on", "size": 8, "max_speed": 3, "steps": 4}
+    )
+    assert head_on["error"] is None and head_on["universe"]["walkers"] == 2
+    assert head_on["universe"]["velocities"] == [[3, 0], [-1, 0]]
+    diagonal = playground({"placement": "diagonal", "size": 8, "steps": 4, "radius": 1})
+    assert diagonal["error"] is None and diagonal["universe"]["radius"] == 1
+    assert diagonal["universe"]["velocities"] == [[1, 0], [0, 1]]
+    crowded = playground({"placement": "random", "radius": 2, "walkers": 50, "size": 6})
+    assert "do not fit" in crowded["error"]
 
 
 RIGHT = RuleSpec.parse(RANDOM_HOP.notation, name="Right", weights=(1, 0, 0, 0))
@@ -343,9 +305,7 @@ def _two_walkers_one_edge(strategy, steps=6):
     system = WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps=strategy)
     start = np.array([lattice.center_node, lattice.center_node])
     rng = np.random.default_rng(0)
-    history, _blocked, waited = system.run(
-        system.initial_state(start, "random", rng), steps, rng
-    )
+    history, waited = system.run(system.initial_state(start), steps, rng)
     return history, waited
 
 
@@ -374,46 +334,40 @@ def test_oldest_alternates_and_random_picks_one_per_shared_edge():
     system = WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps="oldest")
     start = np.array([lattice.node_index(2, 1), lattice.node_index(2, 1)])
     rng = np.random.default_rng(0)
-    _history, _blocked, waited = system.run(
-        system.initial_state(start, "random", rng), 4, rng
-    )
+    _history, waited = system.run(system.initial_state(start), 4, rng)
     assert waited == 4  # one of the two waits in every step
     # Step by step: the walker that waited last time goes first, so they alternate.
-    state = system.initial_state(start, "random", rng)
+    state = system.initial_state(start)
     ages = np.zeros(2, dtype=np.int64)
     waiting = []
     for _ in range(4):
-        state, _path, _collided, _blocked, waited_mask = system.step(state, rng, ages)
+        state, _path, _events, waited_mask = system.step(state, rng, ages)
         waiting.append(int(np.flatnonzero(waited_mask)[0]))
         ages = np.where(waited_mask, ages + 1, 0)
     assert waiting == [1, 0, 1, 0]
     system = WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps="random")
-    _history, _blocked, waited = system.run(
-        system.initial_state(start, "random", rng), 20, rng
-    )
+    _history, waited = system.run(system.initial_state(start), 20, rng)
     assert waited == 20
     with pytest.raises(ValueError, match="overlaps must be one of"):
         WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps="first")
 
 
-def test_overlap_strategies_keep_the_exclusion_on_hyperedge_walkers():
-    lattice = SquareLattice(4)
-    for strategy in ("ordered", "random", "oldest"):
+def test_contact_pairs_are_disjoint_under_every_strategy():
+    lattice = SquareLattice(6)
+    for strategy in ("parallel", "ordered", "random", "oldest"):
         system = WalkerSystem(
-            lattice, (ChainRule(RANDOM_HOP),), "hyperedge", "hpp", overlaps=strategy
+            lattice,
+            tuple(rule_item(s) for s in (REFLECT, EXCHANGE, SWAP, STREAM)),
+            overlaps=strategy,
         )
         rng = np.random.default_rng(2)
-        anchors = np.repeat(np.arange(16), 2)
-        history, _blocked, waited = system.run(
-            system.initial_state(anchors, "random", rng), 30, rng
-        )
-        assert waited > 0 and history.directions is not None
-        for frame in range(31):
-            assert _exclusion_holds(
-                LatticeGasState(
-                    lattice, history.anchors[frame], history.directions[frame]
-                )
-            )
+        anchors = rng.choice(lattice.num_nodes, size=12, replace=False)
+        velocities = rng.integers(-2, 3, size=(12, 2))
+        history, _ = system.run(WalkerGraph(lattice, anchors, velocities), 30, rng)
+        energy = history.energy()
+        assert np.all(energy == energy[0])
+        assert np.all(history.overlaps() == 0)
+        assert history.collisions().sum() > 0
 
 
 def test_playground_reports_the_overlap_strategy():

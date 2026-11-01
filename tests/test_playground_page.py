@@ -48,6 +48,8 @@ def test_every_placement_puts_the_walkers_on_the_world(placement):
     assert np.all(initial.anchors >= 0) and np.all(initial.anchors < 49)
     if placement == "sites":
         assert initial.anchors.tolist() == [3, 48, 48]  # 99 is not on the world
+    elif placement in ("head-on", "diagonal"):
+        assert initial.num_walkers == 2  # the two balls of the collision presets
     else:
         assert initial.num_walkers == 10
     if placement == "left":

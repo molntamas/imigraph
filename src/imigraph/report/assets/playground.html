@@ -18,18 +18,19 @@ pre.request { white-space: pre-wrap; font-size: 12px; background: var(--bg); pad
 <h1>imigraph playground: $title</h1>
 <p class="muted">Generated $generated with the rule editor of the imigraph GUI (or <code>python -m imigraph
 playground-report</code>). A small world, a starting universe and a set of $num_rules rule(s) applied in order in every
-step; the page keeps every state and every matched chain of the run, and compares what was measured with what the
+step; the page keeps every state and every visited site of the run, and compares what was measured with what the
 rules predict.</p>
 
 <h2>1. The rules</h2>
 <div class="card">
-<p>Each rule is an edge rewrite in the notation <code>{w,s}, {s,t} &rarr; {w,t}, {s,t}</code>: a walker edge plus a chain
-of site edges on the left, the walker re-attached to a site of the chain on the right. The pattern drawings show the
-variables as nodes (sites grey, walkers red) and the edges of each side. Direction weights (+x, &minus;x, +y, &minus;y)
-and the self-loop policy of every rule are in the <em>choice</em> and <em>matches</em> columns. The built-in rules of
-hyperedge walkers (Stream, Reflect) and the Collide rule of the <em>hpp</em> collisions are listed the same way.
-Walker model of this run: <strong>$walker_model</strong>, collisions: <strong>$collisions</strong>, overlapping
-matches: <strong>$overlaps</strong>.</p>
+<p>Every walker is a ball <code>{w,s,v}</code>: a walker node on site <code>s</code> with velocity <code>v</code>, a node of
+the velocity lattice (a ball at rest sits on the origin <code>o</code>). Each rule is a rewrite of ball hyperedges in the
+notation <code>{w,s,v}_k, {s,t}_k &rarr; {w,t,v}</code>: the pattern on the left, what replaces it on the right; the
+annotations say which edges of the room and of the velocity lattice are meant. The pattern drawings show the variables
+as nodes (sites grey, walkers red, velocities blue) and the edges of each side with their annotations. Direction
+weights (+x, &minus;x, +y, &minus;y) and the self-loop policy of a rule apply to its drawn edges.
+Velocities of this run: <strong>$velocity</strong>, ball radius: <strong>$radius</strong>, overlapping matches:
+<strong>$overlaps</strong>.</p>
 $rules_table
 <div id="docs">$docs</div>
 </div>
@@ -39,8 +40,8 @@ $rules_table
 <div class="row">
 <div>$universe_table</div>
 <div>
-<p class="muted">The world at step 0: space nodes (grey) with their edges, walkers (red) attached to their starting sites
-(hyperedge walkers as arrows along their heading).</p>
+<p class="muted">The world at step 0: space nodes (grey) with their edges, the balls at their starting sites in their
+own colours with their numbers, an arrow along the velocity of every moving ball.</p>
 <canvas id="universe-canvas" width="400" height="400"></canvas>
 </div>
 </div>
@@ -50,13 +51,15 @@ $rules_table
 <div class="card">
 <div class="row">
 <div>
-<p class="muted">The rule set, one application in four phases (state, match, choose, rewrite) for walker 0.</p>
+<p class="muted">The rule set, one step in four phases (state, match, choose, rewrite) for ball 0: the sites it visited
+in the step.</p>
 <canvas id="rule-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="rule-play">Play</button><input id="rule-slider" type="range"><span id="rule-label" class="label"></span></div>
 <p id="rule-phase" class="muted"></p>
 </div>
 <div>
-<p class="muted">The graph, step by step: all walkers on the small world (arrows: headings; rings: collision sites of the step).</p>
+<p class="muted">The graph, step by step: all balls on the small world (arrows: velocities; a ring marks a ball whose
+velocity a rule changed in the step).</p>
 <canvas id="demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
 <p id="demo-caption" class="muted"></p>
@@ -69,7 +72,8 @@ $rules_table
 <div class="card">
 $measured_table
 <p class="muted">Few walkers and walls make the measured values noisy; the prediction holds far from the walls, for many
-walkers and many steps. A rule with a drift or more hops per step is meant to differ from the uniform random hop.</p>
+walkers and many steps. A rule with a drift or more hops per step is meant to differ from the uniform random hop.
+Moving balls have no diffusion prediction; their momentum and energy are measured instead.</p>
 </div>
 
 <h2>5. Reproduce</h2>
@@ -91,12 +95,19 @@ $viz_js
   const byId = function (id) { return document.getElementById(id); };
   const demo = data.demo;
   const players = [];
+  const radius = (demo.radius + 0.3) * demo.space.spacing;
+
+  function markedAt(f) {
+    const marked = {};
+    if (demo.events && f > 0) demo.events[f - 1].forEach(function (e) { e.balls.forEach(function (b) { marked[b] = true; }); });
+    return marked;
+  }
 
   const universe = V.Viewport(byId("universe-canvas"), demo.space.box, 24);
   universe.clear();
   V.drawSpace(universe, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
   V.drawAgents(universe, demo.anchors[0].map(function (s) { return demo.space.coordinates[s]; }),
-               { radius: 0.3 * demo.space.spacing, fanOut: true, directions: demo.directions ? demo.directions[0] : null });
+               { radius: radius, fanOut: true, velocities: demo.velocities ? demo.velocities[0] : null });
 
   const rule = V.Viewport(byId("rule-canvas"), demo.space.box, 30);
   const steps = demo.times.length - 1;
@@ -112,10 +123,8 @@ $viz_js
   players.push(V.Player(demo.times.length, function (f) {
     world.clear();
     V.drawSpace(world, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-    const marked = {};
-    if (demo.collisions && f > 0) demo.anchors[f - 1].forEach(function (site, w) { if (demo.collisions[f - 1].indexOf(site) >= 0) marked[w] = true; });
     V.drawAgents(world, demo.anchors[f].map(function (s) { return demo.space.coordinates[s]; }),
-                 { radius: 0.3 * demo.space.spacing, fanOut: true, marked: marked, directions: demo.directions ? demo.directions[f] : null });
+                 { radius: radius, fanOut: true, marked: markedAt(f), velocities: demo.velocities ? demo.velocities[f] : null });
     byId("demo-caption").textContent = data.captions && data.captions.length ? data.captions[f] : "";
   }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
        labelFor: function (f) { return "step " + f; }, interval: 500 }));

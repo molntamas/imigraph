@@ -10,14 +10,20 @@ import numpy as np
 from imigraph.experiments.balls import BallComparison
 from imigraph.report import svg
 from imigraph.report.gas import _config_table
-from imigraph.report.html import _checks_table, _occupancy_charts, _rounded
+from imigraph.report.html import (
+    _checks_table,
+    _occupancy_charts,
+    _rounded,
+    _rules_table,
+)
 
 BALL_CONFIG_LABELS = {
     "size": "room: sites per side",
     "balls": "balls",
     "radius": "ball radius (cells)",
     "max_speed": "largest velocity component (cells per step)",
-    "rule": "collision rule",
+    "rule": "collision rule set",
+    "rules": "rules, in order",
     "placement": "placement",
     "spacing": "lattice spacing a (= 1 / size)",
     "step_time": "step time tau (= a: one cell per step is speed 1)",
@@ -28,6 +34,7 @@ BALL_CONFIG_LABELS = {
     "entropy_bins": "entropy grid (bins per side)",
     "substeps": "reference time steps per lattice step",
 }
+FALLBACK_COLORS = ("#f59e0b", "#7c3aed", "#0891b2", "#be185d")
 
 
 def _ball_config_table(config: Any) -> str:
@@ -98,6 +105,21 @@ def ball_fragments(comparison: BallComparison) -> dict[str, str]:
         f"{'PASS' if row['passed'] else 'FAIL'}</span></td><td>{row['detail']}</td></tr>"
         for row in balls.invariants
     )
+    by_rule = balls.run.collisions_by_rule()
+    collision_series = [
+        svg.Series(labels[0], t[1:], gas.run.collisions, colors[0]),
+        svg.Series(labels[1], t[1:], balls.run.collisions(), colors[1]),
+    ] + [
+        svg.Series(
+            f"graph: by {name}",
+            t[1:],
+            counts,
+            FALLBACK_COLORS[i % len(FALLBACK_COLORS)],
+            dashed=True,
+        )
+        for i, (name, counts) in enumerate(by_rule.items())
+        if len(by_rule) > 1
+    ]
     return {
         "graph_checks_table": _checks_table(balls.report, balls.informative),
         "graph_invariants_table": '<div class="table-scroll"><table><thead><tr><th>lattice '
@@ -109,6 +131,7 @@ def ball_fragments(comparison: BallComparison) -> dict[str, str]:
         "occupancy_charts": _occupancy_charts(comparison.report),
         "graph_config_table": _ball_config_table(balls.config),
         "reference_config_table": _config_table(gas.config),
+        "rules_table": _rules_table(list(balls.rules)),
         "energy_chart": svg.line_chart(
             [
                 svg.Series(label, t, energy, color)
@@ -151,17 +174,7 @@ def ball_fragments(comparison: BallComparison) -> dict[str, str]:
             ylabel="entropy",
         ),
         "collisions_chart": svg.line_chart(
-            [
-                svg.Series(labels[0], t[1:], gas.run.collisions, colors[0]),
-                svg.Series(labels[1], t[1:], balls.run.collisions, colors[1]),
-                svg.Series(
-                    "graph: swap fallbacks",
-                    t[1:],
-                    balls.run.fallbacks,
-                    "#f59e0b",
-                    dashed=True,
-                ),
-            ],
+            collision_series,
             title="Collisions per recording interval",
             xlabel="time",
             ylabel="collisions",

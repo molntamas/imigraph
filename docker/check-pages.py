@@ -8,8 +8,10 @@ sandcastle image ships (playwright is a dev dependency).
 
 It opens the newest report, gas and playground pages in Chromium, fails on JavaScript errors,
 checks that the animations have frames and draw onto the canvases, exercises the GUI playground
-(rule list, graphical and text editor, the clickable universe, the saved result page) and runs
-the comparison once with small parameters, and saves screenshots to output/screenshots/. The
+(rule list, graphical and text editor, balls with velocities under the lattice-gas rules, the
+clickable universe, the saved result page), the ball section (presets and the playground's rule
+set against the hard disks) and runs the comparison once with small parameters, and saves
+screenshots to output/screenshots/. The
 newest self-contained GUI page (output/rule_editor_*.html, from ``python -m imigraph gui-page``)
 gets the same GUI check, opened from file:// (screenshots in output/screenshots/rule-editor/). With
 ``--serve`` the script builds the wheel into web/dist and serves web/ itself on a free port
@@ -237,7 +239,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     # Playground: runs on load with the preset rule set (RandomHop ticked).
     wait_playground_done(page, timeout_ms)
     assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
-    assert page.locator("#pg-library tbody tr").count() == 7, "seven preset rules"
+    assert page.locator("#pg-library tbody tr").count() == 11, "eleven preset rules"
     assert page.locator("#pg-lhs circle.node").count() == 3, "w, s, t on the left"
 
     # Rule list: tick BiasedHop, untick RandomHop -> the rule set is the biased hop.
@@ -262,7 +264,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
         timeout=timeout_ms,
     )
     assert page.locator("#pg-rules-table tbody tr").count() == 3
-    assert "3 hops per step" in (page.text_content("#pg-physics") or "")
+    assert "3 chain hops per step" in (page.text_content("#pg-physics") or "")
     page.click("#pg-library tr[data-name=DoubleHop] input.enabled")
     wait_playground_done(page, timeout_ms)
 
@@ -311,14 +313,14 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     # New rule, delete it again.
     page.click("#pg-new")
     wait_playground_done(page, timeout_ms)
-    assert page.locator("#pg-library tbody tr").count() == 8
+    assert page.locator("#pg-library tbody tr").count() == 12
     page.fill("#pg-description", "a fresh rule")
     assert "a fresh rule" in (
         page.text_content("#pg-library tr.selected td.description") or ""
     )
     page.click("#pg-delete")
     wait_playground_done(page, timeout_ms)
-    assert page.locator("#pg-library tbody tr").count() == 7
+    assert page.locator("#pg-library tbody tr").count() == 11
 
     # Overlapping matches: eight walkers at the centre with the ordered strategy wait for
     # contested edges; the measured table and the docs say so.
@@ -336,38 +338,62 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     wait_playground_done(page, timeout_ms)
     print("  overlap strategies ok")
 
-    # Walker models and collisions: HPP collisions need hyperedge walkers; with them, Stream
-    # and Reflect (built-in, not editable) plus hpp is the lattice gas: arrows, rings, Collide.
-    page.select_option("select[name=collisions]", "hpp")
-    message = wait_error(page, True, timeout_ms)
-    assert "hyperedge" in message, message
-    page.select_option("select[name=walker_model]", "hyperedge")
+    # Balls with unit velocities under Stream, Reflect, Swap and Turn: the lattice gas as
+    # editable rules, with arrows, rings, collisions and momentum in the captions.
+    page.select_option("select[name=velocity]", "unit")
     page.select_option("select[name=placement]", "left")
     page.fill("input[name=walkers]", "10")
     page.click("#pg-library tr[data-name=Stream] input.enabled")
     page.click("#pg-library tr[data-name=Reflect] input.enabled")
+    page.click("#pg-library tr[data-name=Swap] input.enabled")
+    page.click("#pg-library tr[data-name=Turn] input.enabled")
     page.click("#pg-library tr[data-name=BiasedHop] input.enabled")
     page.click("#pg-apply")
     wait_error(page, False, timeout_ms)
     wait_playground_done(page, timeout_ms)
     assert (
-        page.locator("#pg-rules-table tbody tr").count() == 4
-    )  # Collide, Stream, Reflect, set
+        page.locator("#pg-rules-table tbody tr").count() == 5
+    )  # Reflect, Swap, Turn, Stream, the set
     first = page.text_content("#pg-rules-table tbody tr:first-child th") or ""
-    assert first.startswith("Collide"), first
-    assert "exclusion principle" in (page.text_content("#pg-docs") or "")
-    assert "blocked hops" in (page.text_content("#pg-measured") or "")
-    page.click("#pg-library tr[data-name=Stream] td.notation")
+    assert first.startswith("Reflect"), first
+    measured = page.text_content("#pg-measured") or ""
     assert (
-        page.is_disabled("#pg-add-site")
-        and page.get_attribute("#pg-notation", "readonly") is not None
-    )
+        "wall bounces in the run" in measured
+        and "0.000" not in measured.split("wall rate")[1][:40]
+    ), measured
+    assert "velocity lattice" in (page.text_content("#pg-docs") or "")
+    assert "collisions in the run" in (page.text_content("#pg-measured") or "")
+    page.click("#pg-library tr[data-name=Turn] td.notation")
+    assert (
+        page.locator("#pg-lhs circle.node").count() == 9
+    )  # w1, w2, s, t, x, v1, v2, v1', v2'
+    assert page.locator("#pg-lhs text.annotation").count() >= 6
     page.wait_for_timeout(300)
     painted(page, "pg-demo-canvas")
     painted(page, "pg-projection-canvas")
     page.screenshot(path=str(out / "gui-lattice-gas.png"), full_page=False)
     assert "total momentum" in (page.text_content("#pg-demo-caption") or "")
-    print("  hyperedge walkers with hpp collisions ok")
+    print("  balls with unit velocities under the lattice-gas rules ok")
+
+    # The ball section can run the playground's ticked rule set against the hard disks.
+    page.select_option("#balls select[name=rule]", "custom")
+    page.wait_for_function(
+        "/^running/.test(document.getElementById('bg-status').textContent)",
+        timeout=timeout_ms,
+    )
+    page.wait_for_function(
+        "/^done/.test(document.getElementById('bg-status').textContent)",
+        timeout=timeout_ms,
+    )
+    summary = page.text_content("#bg-summary") or ""
+    assert "rules Reflect + Swap + Turn + Stream" in summary, summary
+    assert page.locator("#bg-rules svg.pattern").count() == 4
+    page.select_option("#balls select[name=rule]", "exchange")
+    page.wait_for_function(
+        "/^running|^done/.test(document.getElementById('bg-status').textContent)",
+        timeout=timeout_ms,
+    )
+    print("  playground rule set in the ball section ok")
 
     # The ball gas ran on load next to its hard-disk reference: three painted canvases, the
     # exact invariants pass, the tables and charts are there, and a head-on preset collides.
@@ -379,7 +405,8 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     assert page.locator("#bg-invariants .badge.fail").count() == 0
     assert page.locator("#bg-comparison table").count() == 1
     assert page.locator("#bg-speed-chart svg").count() == 1
-    assert "collision rule" in (page.text_content("#bg-docs") or "")
+    assert page.locator("#bg-rules svg.pattern").count() == 4
+    assert "collision rule set" in (page.text_content("#bg-docs") or "")
     page.wait_for_timeout(300)
     for canvas in ("bg-graph-canvas", "bg-projection-canvas", "bg-reference-canvas"):
         painted(page, canvas)
@@ -394,7 +421,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     )
     summary = page.text_content("#bg-summary") or ""
     assert "2 ball(s)" in summary and " collisions on the graph" in summary, summary
-    assert "collided along x" in (page.text_content("#bg-caption") or "") or True
+    assert "rules Reflect + Exchange + Swap + Stream" in summary, summary
     page.screenshot(path=str(out / "gui-balls.png"), full_page=False)
     page.select_option("#balls select[name=placement]", "left")
     page.wait_for_function(
@@ -410,9 +437,10 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     # Back to the Brownian setting for the rest of the check.
     page.click("#pg-library tr[data-name=Stream] input.enabled")
     page.click("#pg-library tr[data-name=Reflect] input.enabled")
+    page.click("#pg-library tr[data-name=Swap] input.enabled")
+    page.click("#pg-library tr[data-name=Turn] input.enabled")
     page.click("#pg-library tr[data-name=BiasedHop] input.enabled")
-    page.select_option("select[name=collisions]", "none")
-    page.select_option("select[name=walker_model]", "edge")
+    page.select_option("select[name=velocity]", "rest")
     page.select_option("select[name=placement]", "center")
     page.fill("input[name=walkers]", "4")
     page.click("#pg-library tr[data-name=BiasedHop] td.notation")
@@ -437,7 +465,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     wait_playground_done(page, timeout_ms)
     assert page.input_value("select[name=placement]") == "sites"
     label = page.text_content("#pg-universe-label") or ""
-    assert label.startswith("5 edge walkers"), label
+    assert label.startswith("5 balls"), label
     print(f"  universe: {label}")
 
     # Files: the result page, the session and the rule set.

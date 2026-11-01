@@ -28,7 +28,7 @@ def test_gas_page_has_both_systems_checks_and_charts(tmp_path):
     assert blob is not None
     data = json.loads(blob.group(1))
     assert len(data["gas"]["positions"]) == 9 and len(data["lattice"]["positions"]) == 9
-    assert len(data["lattice"]["directions"][0]) == 30
+    assert len(data["lattice"]["velocities"][0]) == 30
     assert [c["name"] for c in data["lattice"]["report"]["checks"]] == [
         "energy",
         "momentum",
@@ -41,8 +41,9 @@ def test_gas_page_has_both_systems_checks_and_charts(tmp_path):
         "occupancy",
     ]
     assert [r["name"] for r in data["lattice"]["rules"]] == [
-        "Collide",
         "Reflect",
+        "Turn",
+        "Swap",
         "Stream",
     ]
     written = write_gas_report(tmp_path, result=result, label="test")
@@ -52,9 +53,9 @@ def test_gas_page_has_both_systems_checks_and_charts(tmp_path):
 
 def test_demo_shows_a_collision_and_a_reflection_early():
     demo = default_gas_demo()
-    assert len(demo["sites"]) == 37 and len(demo["collisions"]) == 36
-    assert sum(len(sites) for sites in demo["collisions"][:4]) >= 1
-    sites = np.array(demo["sites"])
+    assert len(demo["anchors"]) == 37 and len(demo["events"]) == 36
+    assert sum(demo["collisions"][:4]) >= 1 and sum(demo["bounces"][:6]) >= 1
+    sites = np.array(demo["anchors"])
     assert np.all(sites >= 0) and np.all(sites < 49)
 
 

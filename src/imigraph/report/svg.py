@@ -290,33 +290,61 @@ def heatmap(counts: np.ndarray, color: str = REFERENCE_COLOR, size: int = 220) -
 PATTERN_SITE_COLOR = "#9ca3af"
 PATTERN_WALKER_COLOR = "#dc2626"
 PATTERN_WALKER_EDGE_COLOR = "#f87171"
+PATTERN_VELOCITY_COLOR = "#2563eb"
+PATTERN_VELOCITY_EDGE_COLOR = "#93c5fd"
+PATTERN_LABEL_COLOR = "#374151"
+
+Ops = tuple[tuple[str, str], ...]
+
+
+def _kind(type_of, variable: str) -> str:
+    kind = type_of(variable)
+    if kind is True:
+        return "walker"
+    if kind is False or kind is None:
+        return "site"
+    return str(kind)
 
 
 def pattern_layout(
     lhs: tuple[tuple[str, ...], ...],
     rhs: tuple[tuple[str, ...], ...],
-    is_walker,
+    type_of,
     width: float,
     height: float,
 ) -> dict[str, tuple[float, float]]:
     """Positions of the variables of a rule pattern inside one panel: sites in a row along the
-    lower part, walkers above the first site they touch (the same layout as the GUI editor,
-    ``patternLayout`` in ``web/app.js``, so both drawings look alike)."""
+    lower part, velocities in a row in the middle, walkers above the first site they touch
+    (the same layout as the GUI editor, ``patternLayout`` in ``web/app.js``, so both drawings
+    look alike)."""
     order: dict[str, None] = {}
     for edge in lhs + rhs:
         for v in edge:
             order.setdefault(v, None)
-    sites = [v for v in order if not is_walker(v)]
-    walkers = [v for v in order if is_walker(v)]
+    sites = [v for v in order if _kind(type_of, v) == "site"]
+    velocities = [v for v in order if _kind(type_of, v) == "velocity"]
+    walkers = [v for v in order if _kind(type_of, v) == "walker"]
     positions: dict[str, tuple[float, float]] = {}
     pad = 0.14 * width  # sites spread over the panel, walkers above them
+    site_y, velocity_y, walker_y = (
+        (0.8 * height, 0.5 * height, 0.2 * height)
+        if velocities
+        else (0.72 * height, 0.5 * height, 0.26 * height)
+    )
     for k, site in enumerate(sites):
         x = (
             width / 2
             if len(sites) == 1
             else pad + k * (width - 2 * pad) / (len(sites) - 1)
         )
-        positions[site] = (x, 0.72 * height)
+        positions[site] = (x, site_y)
+    for k, velocity in enumerate(velocities):
+        x = (
+            width / 2
+            if len(velocities) == 1
+            else pad + k * (width - 2 * pad) / (len(velocities) - 1)
+        )
+        positions[velocity] = (x, velocity_y)
     used: dict[float, int] = {}
     for walker in walkers:
         x = width / 2
@@ -328,28 +356,43 @@ def pattern_layout(
                     break
         k = used.get(x, 0)
         used[x] = k + 1
-        positions[walker] = (x + 14 * k, 0.26 * height)
+        positions[walker] = (x + 14 * k, walker_y)
     return positions
 
 
 def rule_pattern(
     lhs: tuple[tuple[str, ...], ...],
     rhs: tuple[tuple[str, ...], ...],
-    is_walker,
+    type_of,
+    lhs_ops: Ops = (),
+    rhs_ops: Ops = (),
     panel: int = 150,
-    height: int = 80,
+    height: int | None = None,
 ) -> str:
-    """The two sides of a rule as small graphs: variables as nodes (sites grey, walkers red),
-    the edges of each side, an arrow between them."""
+    """The two sides of a rule as small graphs: variables as nodes (sites grey, walkers red,
+    velocities blue), the edges of each side with their annotations, an arrow between them."""
     gap = 26
     width = 2 * panel + gap
-    positions = pattern_layout(lhs, rhs, is_walker, panel, height)
+    has_velocity = any(_kind(type_of, v) == "velocity" for e in lhs + rhs for v in e)
+    if height is None:
+        height = 104 if has_velocity else 80
+    positions = pattern_layout(lhs, rhs, type_of, panel, height)
     parts = [f'<rect width="{width}" height="{height}" fill="white" rx="6"/>']
-    for side, offset in ((lhs, 0.0), (rhs, panel + gap)):
-        for edge in side:
-            walker_edge = any(is_walker(v) for v in edge)
-            color = PATTERN_WALKER_EDGE_COLOR if walker_edge else PATTERN_SITE_COLOR
+    for side, ops, offset in ((lhs, lhs_ops, 0.0), (rhs, rhs_ops, panel + gap)):
+        ops = tuple(ops) + tuple(("", "") for _ in range(len(side) - len(ops)))
+        for edge, (op, arg) in zip(side, ops, strict=True):
+            kinds = [_kind(type_of, v) for v in edge]
+            walker_edge = "walker" in kinds
+            velocity_edge = not walker_edge and "velocity" in kinds
+            color = (
+                PATTERN_WALKER_EDGE_COLOR
+                if walker_edge
+                else PATTERN_VELOCITY_EDGE_COLOR
+                if velocity_edge
+                else PATTERN_SITE_COLOR
+            )
             points = [positions[v] for v in edge if v in positions]
+            label = f"{op}{arg}" if op else ""
             if len(points) == 1 or (
                 len(points) == 2 and points[0] == points[1]
             ):  # a loop {s,s}
@@ -358,16 +401,38 @@ def rule_pattern(
                     f'<circle cx="{offset + x:.1f}" cy="{y - 11:.1f}" r="7" fill="none" '
                     f'stroke="{color}" stroke-width="1.5"/>'
                 )
+                if label:
+                    parts.append(
+                        f'<text x="{offset + x + 9:.1f}" y="{y - 12:.1f}" font-size="8" '
+                        f'fill="{PATTERN_LABEL_COLOR}" font-family="ui-monospace, monospace">'
+                        f"{escape(label)}</text>"
+                    )
                 continue
+            dash = ' stroke-dasharray="4 3"' if velocity_edge else ""
             for (x0, y0), (x1, y1) in pairwise(points):
                 parts.append(
                     f'<line x1="{offset + x0:.1f}" y1="{y0:.1f}" x2="{offset + x1:.1f}" '
-                    f'y2="{y1:.1f}" stroke="{color}" stroke-width="{2 if walker_edge else 1.5}"/>'
+                    f'y2="{y1:.1f}" stroke="{color}" stroke-width="{2 if walker_edge else 1.5}"'
+                    f"{dash}/>"
+                )
+            if label:
+                (x0, y0), (x1, y1) = points[-2], points[-1]
+                parts.append(
+                    f'<text x="{offset + (x0 + x1) / 2 + 3:.1f}" y="{(y0 + y1) / 2 - 3:.1f}" '
+                    f'font-size="8" fill="{PATTERN_LABEL_COLOR}" '
+                    f'font-family="ui-monospace, monospace">{escape(label)}</text>'
                 )
         for v, (x, y) in positions.items():
             if not any(v in edge for edge in side):
                 continue
-            color = PATTERN_WALKER_COLOR if is_walker(v) else PATTERN_SITE_COLOR
+            kind = _kind(type_of, v)
+            color = (
+                PATTERN_WALKER_COLOR
+                if kind == "walker"
+                else PATTERN_VELOCITY_COLOR
+                if kind == "velocity"
+                else PATTERN_SITE_COLOR
+            )
             parts.append(
                 f'<circle cx="{offset + x:.1f}" cy="{y:.1f}" r="7" fill="{color}"/>'
                 f'<text x="{offset + x:.1f}" y="{y + 3.5:.1f}" font-size="9" fill="white" '

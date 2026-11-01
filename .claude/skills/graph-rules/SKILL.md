@@ -1,41 +1,67 @@
 ---
 name: graph-rules
-description: How graph systems are built in imigraph - spaces (neighbour tables with coordinates), walker graphs, Wolfram-style edge-rewriting rules, initial conditions, projections and their physical parameters. Use when adding or changing a space, a rule, an initial condition or a projection.
+description: How graph systems are built in imigraph - the room (a lattice with a neighbour table and coordinates), the velocity lattice, the one kind of walker (the ball {w,s,v}), the annotated rule notation and its matcher, rounds and contacts, initial conditions, projections and their physical parameters. Use when adding or changing a space, a rule, a relation of the notation, an initial condition or a projection.
 ---
 
 # Graph systems
 
-Read `docs/architecture.md` ("The first graph system in detail") before changing anything in
+Read `docs/architecture.md` (from "The one walker" on) before changing anything in
 `src/imigraph/graph/`.
 
 ## Vocabulary
 
-- **Space**: a static graph whose nodes carry 2D coordinates. Stored as a dense neighbour table
-  `neighbors[node, k]` (same degree everywhere; missing neighbours are self-loops) plus
-  `coordinates (num_nodes, 2)`, a `box` and a `cell_size`. `SquareLattice` is the first one.
-- **WalkerGraph**: the evolving graph. Space nodes `0 .. N-1`, walker nodes `N .. N+n-1`, each
-  walker attached to the space by exactly one edge `{walker, anchors[walker]}`.
-- **Rule**: `apply(state, rng) -> WalkerGraph`. Written as an edge rewrite in the Wolfram style,
-  for example `RandomHop`: `{w, s}, {s, s'} -> {w, s'}, {s, s'}`. Rules are applied to all
-  walkers synchronously, vectorised with numpy; the only randomness comes from `rng`.
-- **GraphSimulation**: space + rule + `step_time` (the physical duration of one rule
-  application). `run(initial, steps, rng, record_every)` returns a `GraphHistory`.
-- **Projection**: `GraphHistory.project()` maps walkers to their node coordinates;
-  `project(cell_rng=rng)` spreads them inside their node's cell (resolution of the imitation).
+- **Space** (the room): a static graph whose nodes carry 2D coordinates. Stored as a dense
+  neighbour table `neighbors[node, k]` (same degree everywhere; missing neighbours are
+  self-loops, the walls) plus `coordinates (num_nodes, 2)`, a `box` and a `cell_size`.
+  `SquareLattice` is the only one so far.
+- **Velocity lattice** (`graph/velocity.py`): the integer vectors `(vx, vy)` in cells per step,
+  with the same direction labels `+x, -x, +y, -y`; the origin `o` is rest. Never stored as a
+  graph: `velocity_box(max_speed)` enumerates its nodes, `mirror`, `turn`, `direction_of`,
+  `perpendicular` are its relations, `hop_order` the Bresenham hops of a velocity.
+- **Ball**: the one kind of walker, the hyperedge `{w, s, v}` of `WalkerGraph(space, anchors,
+  velocities, radius)`. A ball at rest (velocity `o`, or `velocities=None`) is the random
+  walker; a unit velocity is the lattice-gas walker; `radius > 0` gives it a body (the lattice
+  points within the radius, `state.sites()`), which moves rigidly.
+- **Rule**: a rewrite of ball hyperedges in the annotated notation (`RuleSpec`), see the table
+  in `docs/architecture.md`. Two families: *chain* rules (`{w,s}, {s,t} -> {w,t}`, vectorised
+  by `ChainRule`, with predicted drift and diffusion) and *ball* rules (everything with a
+  velocity or an annotation, executed by the generic matcher `BallRule`).
+- **WalkerSystem** (`graph/world.py`): a rule set run in rounds; `GraphHistory` the record.
+- **Projection**: `GraphHistory.project()` maps balls to their site coordinates;
+  `project(cell_rng=rng)` spreads them inside their cell (resolution of the imitation).
+
+## How a step runs (`WalkerSystem.step`)
+
+1. Every ball gets a hop budget `|vx| + |vy|`, its hops in Bresenham order. The *round rules*
+   (balls with a hop label `_k`) run in order in every round on the balls with hops left; a
+   ball that moves to its hop target consumes a hop; a ball whose velocity changed continues
+   with the tail of the new hop order. Rounds end when no ball has hops left.
+2. The *step rules* (chain rules, Kick) run once each.
+
+`round_context` decides who moves: a ball that cannot move (no hops, wall) stays; two balls
+whose hops meet (one site, a staying ball, a crossing) are held, and a ball landing on a held
+ball is held too, until stable. Held pairs that approach each other are the *contacts*; the
+collision rules match those pairs and are re-applied while they find new contacts. A ball still
+held when Stream runs waits. Consequence: no two balls ever share a site, whatever the rules.
 
 ## Adding a rule
 
-1. Write the rewrite rule in the docstring in Wolfram notation and say what it means physically
-   (which quantity it conserves, what diffusion coefficient or velocity it produces).
-2. Implement `apply` with numpy indexing over all walkers (`neighbors[state.anchors, choice]`).
-   No Python loop over walkers.
-3. Derive the physical parameter the experiment needs (like `lattice_hop_diffusion`) and put
-   the derivation in the function docstring.
-4. Tests (`tests/test_graph.py`): every move follows an existing edge; walkers stay on the
-   space; the derived parameter is reproduced by a free run (`MSD = 4 D t`, or the analogue);
-   determinism with a seed.
-5. Compare against the reference with `compare()`; add the pass/fail cases to
-   `tests/test_compare.py` if the rule is meant to imitate something.
+1. Write it in the notation; put the library constant in `graph/rules.py` with its texts in
+   `LIBRARY_TEXTS` and the preset in `web/app.js` (same notation). Say in the description what
+   it does physically and what it conserves.
+2. The matcher runs it; nothing else to implement. A rule that needs a relation the notation
+   lacks is a change of the language: parse it (`_EDGE`, `DirRef`), validate it in
+   `BallPlan.compile` with a message that says what to change, evaluate it in `BallRule.match`
+   (vectorised over candidate rows; unknown velocities are enumerated on the velocity box),
+   draw it (`svg.rule_pattern`, `renderPattern` in `web/app.js`), document it in
+   `report/assets/collisions.html`.
+3. Tests (`tests/test_rules.py`, `tests/test_world.py`, `tests/test_balls.py`): what the rule
+   does on a hand-placed pair (`graph.balls.place`), what it conserves over a random run
+   (energy exact, momentum changes only at bounces, no shared sites), the messages of invalid
+   notations. A chain rule also needs its predicted drift and diffusion reproduced by a free
+   run (`MSD = 4 D t`).
+4. Compare against a reference with `compare()` when the rule is meant to imitate something
+   (the ball gas against the hard disks in `experiments/balls.py`).
 
 ## Adding a space
 
@@ -43,96 +69,42 @@ Implement the `Space` protocol. Keep the neighbour table dense: pad with self-lo
 encode reflecting boundaries) or give the rule a per-node degree to sample from. Provide
 `edges()` (undirected, no self-loops) and `to_networkx()` with `pos` attributes for views. Test
 the structure against the matching networkx generator (`nx.grid_2d_graph` for the lattice).
+Bodies, the line of centres and the captions use `lattice_cells` and need a square lattice.
 
 ## Rendering
 
-The report draws the space from `GraphHistory.to_dict()` (`coordinates`, `edges`, `anchors`
-per frame); walker nodes are drawn next to their anchor with their edge (`viz.js`,
-`drawWalkers`). A new space needs nothing more as long as it provides coordinates.
+The pages draw the space from `GraphHistory.to_dict()` (`coordinates`, `edges`, `anchors`,
+`velocities`, `events` per frame); balls are drawn by `viz.js` `drawAgents` in their own colour
+with their number, an arrow along the velocity and a ring when a rule changed their velocity
+in the step. The rule diagram shows the sites ball 0 visited in a step (`paths`).
 
 ## Rules as data (editable in the GUI)
 
-- `RuleSpec` (`graph/rules.py`): notation `{w,s}, {s,t} -> {w,t}, {s,t}`, direction weights
-  `(+x, -x, +y, -y)`, `self_loops` `allow` / `forbid`; JSON via `to_dict` / `from_dict`. The
-  supported family is the walker-anchored chain (one walker edge, a chain of site edges, the
-  walker re-attached to a chain site, site edges unchanged); `chain()` raises a `ValueError`
-  whose message the editor shows. `ChainRule(spec)` runs it; `rule_from_spec(data)` is the
-  entry point used by `ExperimentConfig.rule`, the CLI `--rule` and `report.live.playground`;
-  `data` may be a list of specs, which gives a `RuleSequence` (the GUI's rule set: the rules
-  run in order in every step; drifts and diffusions add, chains are concatenated for the
-  diagram). `rule_specs(data)` validates the same input.
-- The GUI edits a spec graphically (`web/app.js`, nodes = variables, one edge set per side) and
-  as text; both produce the same JSON. Keep validation in `RuleSpec.chain()`: the editor shows
-  its message, so a new constraint needs a message that says what to change.
-- Prediction before measurement: `spec.drift(a, tau)` and `spec.diffusion(a, tau)`; the
-  playground shows measured vs predicted. A new rule family needs the same: derive, then test.
-- Rule diagrams need the matched chains: `GraphSimulation.run(record_paths=True)` for rules
-  that implement `apply_with_paths`.
-- Every `RuleSpec` has a free-text `description` (JSON key `description`, shown in the rule
-  tables and the GUI library); keep it when adding fields to the JSON form.
+- `RuleSpec` (`graph/rules.py`): notation, `weights` `(+x, -x, +y, -y)` for drawn edges,
+  `self_loops`, `description`, `family`; JSON via `to_dict` / `from_dict`. Validation stays in
+  Python (`chain()` for the chain family, `plan()` for ball rules): the editor shows the message,
+  so a new constraint needs a message that says what to change.
+- `rule_from_spec(data)` (chain rules only: `ExperimentConfig.rule`, the CLI `--rule`),
+  `rules_from_data(list)` (any rules: `report.live.playground`, the ball gas's `custom` set),
+  `rule_item(spec)` picks `ChainRule` or `BallRule`.
+- The GUI edits a spec graphically (`web/app.js`, nodes = variables with three types, one edge
+  set per side, annotations shown on the edges and edited in the text) and as text; both produce
+  the same JSON.
 
-## Walker models and collisions (`graph/world.py`)
+## Presets
 
-`WalkerSystem(space, rules, walker_model, collisions, step_time)` is the playground's system
-and unites the two walker models under one rule set:
-
-- `walker_model="edge"`: walkers `{w,s}` (`WalkerGraph`), no interaction, chain rules only
-  (equivalent to `RuleSequence`).
-- `walker_model="hyperedge"`: walkers `{w,s,s'}` (`LatticeGasState`), exclusion principle.
-  A chain rule's last hop sets the heading; the built-in rules `BuiltinRule("stream")` and
-  `BuiltinRule("reflect")` (JSON `{"builtin": "stream", "name": ..., "description": ...}`)
-  follow the heading. Every rule's proposal goes through `resolve_exclusion`: stayers keep
-  their channel, clashes have one winner (random), jams propagate, trains move together.
-  `blocked` hops are counted and reported. `momentum(history)` and `explain_frames(history)`
-  give the total momentum per frame and a caption per frame (used by the GUI and the pages);
-  HPP collisions conserve momentum and energy exactly, walls exchange momentum.
-- `collisions="hpp"` runs `LatticeGas.collide` first in every step (hyperedge walkers only);
-  Reflect + Stream + hpp reproduces `LatticeGas` step for step (`tests/test_world.py`).
-- `rules_from_data(list)` builds the rule tuple from the request's `rule` list;
-  `system.descriptions()` lists Collide (if on), every rule and the set, each with a pattern.
-
-- `overlaps` (`parallel`, `ordered`, `random`, `oldest`): the strategy for overlapping matches
-  of one chain rule (matches sharing a site edge; `select_matches`). `parallel` applies all,
-  the others apply a greedy non-overlapping set in index / random / longest-waiting order and
-  count the skipped matches as *waiting* hops. Explained in `report/assets/overlaps.html`.
-
-A new collision type: add it to `COLLISIONS`, apply it in `WalkerSystem.step` before the
-rules, describe it in `COLLISION_TEXT` and `descriptions()`, document it in
-`report/assets/collisions.html` (shown in the GUI and on the saved page), and test that the
-exclusion still holds every step. A new walker model needs its own state class, an
-`initial_state`, and a decision for every existing rule kind.
-
-## Newtonian motion: the bouncing ball (`graph/newton.py`)
-
-`NewtonWorld(space).place(centre, velocity, radius, mass)` makes a rigid `BallState`; `run`
-gives a `BallRun` with `energy()`, `momentum()`, `configuration_entropy()`,
-`visitation_entropy()`, `shape_intact()` and `checks()`. Integer velocities only; walls are the
-self-loops, a bounce flips the hit component mid-step. Adding gravity means a velocity change
-per step (then energy is kinetic + potential); several balls need a collision rule between
-them. World 2 of the GUI calls `report.live.newton(request)`; `assets/newton.html` explains it.
-
-## The ball gas (`graph/balls.py`)
-
-`BallGas(space, step_time, rule)` with `rule` in `COLLISION_RULES` (`exchange`, `swap`,
-`none`); `place(centres, velocities, radius)`, `run(initial, steps, record_every)` give a
-`BallGasRun` with `to_gas_run()` (so the gas checks apply), `checks()` (exact invariants),
-`captions()` and `events`. A new collision rule: add it to `COLLISION_RULES` and
-`COLLISION_RULE_TEXT`, implement it in `BallGas._collide` (return the new velocities, whether
-a collision happened and whether it was exact), document it in `report/assets/balls.html` and
-test that energy and momentum stay exact and no two balls share a site.
-`experiments/balls.py` runs the hard-disk reference from the same start (`run_reference`).
-
-## Conserving rules: the lattice gas (`graph/gas.py`)
-
-Walkers with a heading are hyperedges `{w, s, s'}` (`LatticeGasState`: `sites`,
-`directions`); rules Collide / Reflect / Stream (HPP) conserve momentum and energy and keep one
-walker per channel. The same rules are available in the playground through `graph/world.py`. When adding a conserving rule: state the conserved quantity in the
-docstring, keep the exclusion invariant (`tests/test_lattice_gas.py` checks it every step),
-return a `GasRun` so the gas checks apply, and describe the rules in `RULES` for the page.
+- `graph/gas.py` `LatticeGas`: Reflect, Turn, Swap, Stream on unit velocities (HPP at the
+  contact); `simulate` returns a `GasRun` for the gas checks.
+- `graph/balls.py` `COLLISION_RULE_SETS`: `exchange`, `swap`, `hpp`; `place(space, centres,
+  velocities, radius)` refuses overlapping starts.
+- `report/live.py` `playground`: placements (`center`, `corner`, `random`, `left`, `sites`,
+  `head-on`, `diagonal`), `velocity` (`rest`, `unit`, `random`), `max_speed`, `radius`,
+  explicit `velocities`.
 
 ## Next steps on the roadmap
 
 Growing spaces (rules that add nodes/edges), projections computed from the graph (spectral
-embedding), hypergraphs, FHP (hexagonal lattice) for an isotropic lattice gas, an editor for
-multi-walker (interaction) rules. Keep `Space` and `Rule` as the seams; do not special-case the
-lattice in the simulation loop.
+embedding), FHP (hexagonal lattice) for an isotropic lattice gas, gravity (a velocity increment
+per step, potential energy), particles made of several nodes and edges with their own collision
+rules. Keep `Space`, the notation and `WalkerSystem` as the seams; do not special-case a rule
+in the simulation loop.

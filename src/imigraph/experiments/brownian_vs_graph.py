@@ -47,7 +47,7 @@ class ExperimentConfig:
             raise ValueError("at least two particles are needed for the statistics")
         if self.entropy_bins < 1:
             raise ValueError("entropy_bins must be >= 1")
-        rule_specs(self.rule)  # validate early, with the editor's error message
+        rule_from_spec(self.rule)  # validate early, with the editor's error message
 
     @property
     def diffusion(self) -> float:
