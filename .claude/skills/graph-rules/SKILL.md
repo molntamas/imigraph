@@ -83,7 +83,9 @@ and unites the two walker models under one rule set:
   `BuiltinRule("reflect")` (JSON `{"builtin": "stream", "name": ..., "description": ...}`)
   follow the heading. Every rule's proposal goes through `resolve_exclusion`: stayers keep
   their channel, clashes have one winner (random), jams propagate, trains move together.
-  `blocked` hops are counted and reported.
+  `blocked` hops are counted and reported. `momentum(history)` and `explain_frames(history)`
+  give the total momentum per frame and a caption per frame (used by the GUI and the pages);
+  HPP collisions conserve momentum and energy exactly, walls exchange momentum.
 - `collisions="hpp"` runs `LatticeGas.collide` first in every step (hyperedge walkers only);
   Reflect + Stream + hpp reproduces `LatticeGas` step for step (`tests/test_world.py`).
 - `rules_from_data(list)` builds the rule tuple from the request's `rule` list;

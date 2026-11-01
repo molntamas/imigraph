@@ -1,0 +1,30 @@
+<p>Two hyperedge walkers on a 4&times;4 world with reflecting walls, the HPP rules (collisions <em>hpp</em>, Reflect,
+Stream). Walker 0 starts at (0,1) heading +x, walker 1 at (2,1) heading &minus;x: two sites apart, straight at each
+other. Play the animation and read the caption of every step; the same captions appear under the step-by-step
+animation of every hyperedge run in the playground.</p>
+<ol>
+<li><strong>Step 1, Stream.</strong> Each walker moves one edge along its heading. Both arrive at (1,1), one heading +x,
+the other &minus;x: a <em>head-on pair</em>, the only configuration Collide acts on. They may share the site because the
+exclusion principle is about channels (site + heading), not sites.</li>
+<li><strong>Step 2, Collide, then Stream.</strong> Collide runs first in every step. It finds the head-on pair at (1,1),
+checks that the perpendicular channels +y and &minus;y are empty and are real edges (not wall self-loops), and rewrites
+<code>{w0,s,+x}, {w1,s,&minus;x} &rarr; {w0,s,+y}, {w1,s,&minus;y}</code> (or the other way round, drawn at random). Then Stream
+moves them apart to (1,2) and (1,0). The site is ringed in the animation. Momentum before: <code>(+1) + (&minus;1) = 0</code>
+along x; after: <code>(+1) + (&minus;1) = 0</code> along y. Every walker keeps its speed, one lattice spacing per step, so
+the kinetic energy is unchanged. Nothing else can happen to a head-on pair on a square lattice: the only two-walker
+states with zero momentum are the x pair and the y pair.</li>
+<li><strong>Step 3, Reflect, then Stream.</strong> The walker heading &minus;y at (1,0) faces the wall: its &minus;y edge is a
+self-loop. Reflect turns it round to +y, the wall takes the momentum (as a specular wall does for a hard disk), and
+Stream moves it back to (1,1). The other walker streams on to (1,3).</li>
+<li><strong>Steps 4 and 5.</strong> The walker at (1,3) reflects at the top wall and comes back heading &minus;y, meets the
+other one heading +y at (1,2): a head-on pair again, and Collide sends them out along &plusmn;x. The caption shows the
+total momentum at every step: it changes only in the steps with a wall reflection, never in a collision.</li>
+</ol>
+<p><strong>What the rule does not do, deliberately.</strong> Two walkers meeting at right angles (+x and +y on one site)
+pass through each other: on a square lattice there is no other two-walker state with the same momentum, so a
+momentum-conserving rule cannot do anything with them. Two head-on walkers on <em>neighbouring</em> sites swap sites in
+one Stream and never share a site, so they do not collide either: the HPP lattice splits into two sub-lattices that
+never interact (a known artefact of HPP, fixed by the hexagonal FHP lattice, which is the next step on the roadmap).
+A chain rule on hyperedge walkers (a random hop) is not a collision: it injects momentum at random, like a heat bath;
+for a conserving gas use Stream and Reflect only. Try it: load this world into the playground, change a heading or a
+starting site, and watch which steps still collide.</p>

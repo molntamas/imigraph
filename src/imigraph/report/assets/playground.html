@@ -58,6 +58,7 @@ $rules_table
 <p class="muted">The graph, step by step: all walkers on the small world (arrows: headings; rings: collision sites of the step).</p>
 <canvas id="demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
+<p id="demo-caption" class="muted"></p>
 <label class="muted">playback speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="speed-label"></span></label>
 </div>
 </div>
@@ -113,6 +114,7 @@ $viz_js
     if (demo.collisions && f > 0) V.drawCollisionMarks(world, demo.space.coordinates, demo.collisions[f - 1], demo.space.spacing);
     if (demo.directions) V.drawArrows(world, demo.space.coordinates, demo.anchors[f], demo.directions[f], demo.space.spacing);
     else V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+    byId("demo-caption").textContent = data.captions && data.captions.length ? data.captions[f] : "";
   }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
        labelFor: function (f) { return "step " + f; }, interval: 500 }));
   V.speedControl(byId("speed"), byId("speed-label"), players);
