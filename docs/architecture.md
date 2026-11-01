@@ -10,8 +10,12 @@ src/imigraph/
                            data: notation, JSON, validation, predicted drift/diffusion), ChainRule,
                            RuleSequence (a rule set: several chain rules per step)
   graph/gas.py             LatticeGas: HPP rules Collide / Reflect / Stream on hyperedges {w,s,s'}
-  graph/newton.py          NewtonWorld: a rigid ball of walkers with an integer velocity, elastic walls,
-                           energy / momentum / entropy tracking (world 2 of the GUI)
+  graph/newton.py          NewtonWorld: one rigid ball of walkers with an integer velocity, elastic walls,
+                           energy / momentum / entropy tracking (the core the ball gas builds on)
+  graph/balls.py           BallGas: several balls, elastic wall bounces, collision rules exchange / swap /
+                           none, exact invariants, captions (the GUI's "balls bouncing in a room")
+  experiments/balls.py     BallGasConfig, run_ball_gas, run_reference (the hard-disk gas from the same
+                           start) and run_ball_comparison; report/balls.py renders them
   graph/world.py           WalkerSystem: one rule set on either walker model (edge / hyperedge),
                            collisions none / hpp, built-in Stream and Reflect, exclusion update,
                            overlap strategies for matches of one rule (parallel/ordered/random/oldest)
@@ -157,6 +161,21 @@ room: configuration (one frame at cell resolution, `ln k` for a rigid body) and 
 (fraction of grid cells visited, non-decreasing). `run.checks()` turns these into pass/fail rows; `report.live.newton(request)`
 adds SVG charts and the explanation `assets/newton.html`. `tests/test_newton.py` checks the
 straight line, the reflection law, the invariants over a long run and the entropies.
+
+## The ball gas against the hard-disk gas (`graph/balls.py`, `experiments/balls.py`)
+
+Several balls of the kind above, with a *collision rule*: `exchange` (the elastic collision of
+equal masses, the velocity component along the lattice line of centres is exchanged; exact
+along an axis, and on a diagonal whenever the exchanged amount is an integer, otherwise the
+velocity vectors are swapped and the hit is counted as a fallback), `swap` (always swap the
+vectors) or `none` (pass through). Contacts are detected after every round of hops (a shared
+site or a crossing along an edge), the hop that produced a contact is undone, so no two balls
+share a site. Momentum and energy are exact integers. `run_ball_comparison` starts the hard-disk
+gas of `reference/gas.py` exactly where the balls start, with their velocities and disks
+covering their cells, records it at the lattice steps, applies the gas checks to both and
+`compare()` to the projection of the graph system against the reference. The GUI section
+"Balls bouncing in a room" shows the graph, its 2D projection and the reference side by side
+with captions, the checks tables and the charts (`report/balls.py`, `live.balls`).
 
 ## Rules as data (`RuleSpec`, `ChainRule`)
 

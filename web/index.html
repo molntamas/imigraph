@@ -56,7 +56,7 @@
 WebAssembly). The first load downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.
 <span id="load-status"></span></p>
 
-<h2>World 1: small things moving on a lattice graph, the playground (random walkers, lattice gas)</h2>
+<h2>Small things moving on a lattice graph: the playground (random walkers, lattice gas)</h2>
 <div class="card">
 <p>A <em>rule</em> is an edge rewrite: a walker edge <code>{w,s}</code> plus a chain of site edges on the left, the walker
 re-attached to a site of the chain on the right. Edit a rule in the drawing or in the text, both show the same rule.
@@ -201,7 +201,7 @@ where a collision fired in this step).</p>
 </div>
 </div>
 
-<h2>World 1, comparison run: do the random walkers imitate Brownian motion?</h2>
+<h2>Comparison run: do the random walkers imitate Brownian motion?</h2>
 <div class="card">
 <form class="params" id="params" onsubmit="return false;">
   <label>particles <input name="particles" type="number" value="1000" min="2" step="1"></label>
@@ -278,43 +278,69 @@ systems. The occupancy entropy rises towards ln(bins), on average but not monoto
 <div class="card"><pre id="markdown"></pre></div>
 </div>
 
-<h2>World 2: Newtonian motion without gravity, a ball bouncing in a room</h2>
+<h2>Balls bouncing in a room: a graph gas held against the hard-disk gas</h2>
 <div class="card">
-<p>One rigid object made of several walker nodes moves in a straight line with an integer velocity (cells per step) and
-bounces elastically off the walls of the room, seen from above: no gravity, no friction. The run keeps track of the
-kinetic energy, the momentum and two entropies; the checks below say whether they behave as Newton demands.</p>
-<form class="params" id="newton" onsubmit="return false;">
-  <label>room size (sites per side) <input name="size" type="number" value="12" min="4" max="30" step="1"></label>
-  <label>ball radius (0 = one walker) <input name="radius" type="number" value="1" min="0" max="4" step="1"></label>
-  <label>velocity v<sub>x</sub> (cells per step) <input name="vx" type="number" value="2" min="-5" max="5" step="1"></label>
-  <label>velocity v<sub>y</sub> <input name="vy" type="number" value="1" min="-5" max="5" step="1"></label>
-  <label>steps <input name="steps" type="number" value="80" min="1" max="400" step="1"></label>
-  <label>entropy grid (bins per side) <input name="bins" type="number" value="6" min="2" max="12" step="1"></label>
+<p>Several rigid balls, each one walker node (or the nodes within a radius), move in straight lines with integer velocities,
+bounce elastically off the walls and collide with each other by a <em>collision rule</em> you choose. No gravity, no
+friction. The same balls, from the same start, also run as a traditional hard-disk gas: that is the reference, and the
+2D projection of the graph system is held against it frame by frame. Energy, momentum, entropy and the speed distribution
+are tracked for both.</p>
+<form class="params" id="balls" onsubmit="return false;">
+  <label>room size (sites per side) <input name="size" type="number" value="10" min="4" max="20" step="1"></label>
+  <label>balls <input name="balls" type="number" value="6" min="1" max="20" step="1"></label>
+  <label>ball radius (0 = one node) <input name="radius" type="number" value="0" min="0" max="2" step="1"></label>
+  <label>max speed (cells per step) <input name="max_speed" type="number" value="2" min="0" max="4" step="1"></label>
+  <label>steps <input name="steps" type="number" value="80" min="1" max="300" step="1"></label>
+  <label>seed <input name="seed" type="number" value="0" step="1"></label>
+  <label>collision rule <select name="rule">
+    <option value="exchange">exchange: elastic, exact along axes, swap fallback on odd diagonal hits</option>
+    <option value="swap">swap: always exchange the velocity vectors</option>
+    <option value="none">none: balls pass through each other</option>
+  </select></label>
+  <label>placement <select name="placement">
+    <option value="left">random sites of the left half, random velocities</option>
+    <option value="random">random sites of the room, random velocities</option>
+    <option value="head-on">two balls head-on (exact exchange)</option>
+    <option value="diagonal">two balls at right angles (diagonal hit)</option>
+  </select></label>
+  <label>entropy grid (bins per side) <input name="entropy_bins" type="number" value="5" min="2" max="10" step="1"></label>
 </form>
 <div class="buttons">
-  <button id="nw-run" class="primary" disabled>Run the ball</button>
-  <span id="nw-status" class="muted"></span>
+  <button id="bg-run" class="primary" disabled>Run the balls</button>
+  <span id="bg-status" class="muted"></span>
 </div>
-<p id="nw-error" class="error"></p>
+<p id="bg-error" class="error"></p>
 <div class="row">
 <div>
-<p class="muted">The room, step by step: the ball's walkers (red) with the velocity arrow; a ring marks a step with a bounce.</p>
-<canvas id="nw-canvas" width="520" height="520"></canvas>
-<div class="controls"><button id="nw-play">Play</button><input id="nw-slider" type="range"><span id="nw-label" class="label"></span></div>
-<p id="nw-caption" class="muted"></p>
-<label class="muted">playback speed <input id="nw-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="nw-speed-label"></span></label>
+<p class="muted">The graph: the room's sites and edges, the balls' walker nodes (red) with the velocity arrow; a ring marks a
+ball that collided in this step.</p>
+<canvas id="bg-graph-canvas" width="400" height="400"></canvas>
 </div>
 <div>
-<div id="nw-summary"></div>
-<div id="nw-checks"></div>
+<p class="muted legend-cand">The 2D projection of the graph system: the ball centres as disks covering their cells.</p>
+<canvas id="bg-projection-canvas" width="400" height="400"></canvas>
 </div>
+<div>
+<p class="muted legend-ref">The reference: the hard-disk gas from the same start, the traditional simulation.</p>
+<canvas id="bg-reference-canvas" width="400" height="400"></canvas>
+</div>
+</div>
+<div class="controls"><button id="bg-play">Play</button><input id="bg-slider" type="range"><span id="bg-label" class="label"></span>
+<label class="muted">playback speed <input id="bg-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="bg-speed-label"></span></label></div>
+<p id="bg-caption" class="muted"></p>
+<p>Verdict: <span id="bg-verdict" class="badge"></span> <span id="bg-summary" class="muted"></span></p>
+<div class="row">
+<div><h3>Graph system: exact lattice invariants</h3><div id="bg-invariants"></div></div>
+<div><h3>Graph system: gas checks</h3><div id="bg-graph-checks"></div></div>
 </div>
 <div class="row">
-<div id="nw-energy-chart"></div>
-<div id="nw-momentum-chart"></div>
+<div><h3>Reference: gas checks</h3><div id="bg-reference-checks"></div></div>
+<div><h3>Projection against the reference</h3><div id="bg-comparison"></div></div>
 </div>
-<div id="nw-entropy-chart"></div>
-<div id="nw-docs"></div>
+<div class="row"><div id="bg-energy-chart"></div><div id="bg-momentum-chart"></div></div>
+<div class="row"><div id="bg-entropy-chart"></div><div id="bg-collisions-chart"></div></div>
+<div class="row"><div id="bg-speed-chart"></div><div id="bg-occupancy"></div></div>
+<div id="bg-docs"></div>
 </div>
 </main>
 

@@ -111,6 +111,17 @@ self-loops, a bounce flips the hit component mid-step. Adding gravity means a ve
 per step (then energy is kinetic + potential); several balls need a collision rule between
 them. World 2 of the GUI calls `report.live.newton(request)`; `assets/newton.html` explains it.
 
+## The ball gas (`graph/balls.py`)
+
+`BallGas(space, step_time, rule)` with `rule` in `COLLISION_RULES` (`exchange`, `swap`,
+`none`); `place(centres, velocities, radius)`, `run(initial, steps, record_every)` give a
+`BallGasRun` with `to_gas_run()` (so the gas checks apply), `checks()` (exact invariants),
+`captions()` and `events`. A new collision rule: add it to `COLLISION_RULES` and
+`COLLISION_RULE_TEXT`, implement it in `BallGas._collide` (return the new velocities, whether
+a collision happened and whether it was exact), document it in `report/assets/balls.html` and
+test that energy and momentum stay exact and no two balls share a site.
+`experiments/balls.py` runs the hard-disk reference from the same start (`run_reference`).
+
 ## Conserving rules: the lattice gas (`graph/gas.py`)
 
 Walkers with a heading are hyperedges `{w, s, s'}` (`LatticeGasState`: `sites`,
