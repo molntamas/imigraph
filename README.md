@@ -51,6 +51,10 @@ docker compose run --rm dev uv run python -m imigraph playground-report --reques
 docker compose run --rm dev uv run python -m imigraph report --rule '[{"name":"Hop","notation":"{w,s}, {s,t} -> {w,t}, {s,t}"}]'
 ```
 
+World 2 of the GUI is Newtonian motion without gravity: a rigid ball of walker nodes with an
+integer velocity bounces elastically in a room, with the kinetic energy, the momentum and two
+entropies tracked and checked at every step (`imigraph.graph.newton`).
+
 Published pages: [imigraph-reports](https://github.com/molntamas/imigraph-reports).
 
 ## Development in Docker (nothing installed on the host)

@@ -10,6 +10,8 @@ src/imigraph/
                            data: notation, JSON, validation, predicted drift/diffusion), ChainRule,
                            RuleSequence (a rule set: several chain rules per step)
   graph/gas.py             LatticeGas: HPP rules Collide / Reflect / Stream on hyperedges {w,s,s'}
+  graph/newton.py          NewtonWorld: a rigid ball of walkers with an integer velocity, elastic walls,
+                           energy / momentum / entropy tracking (world 2 of the GUI)
   graph/world.py           WalkerSystem: one rule set on either walker model (edge / hyperedge),
                            collisions none / hpp, built-in Stream and Reflect, exclusion update,
                            overlap strategies for matches of one rule (parallel/ordered/random/oldest)
@@ -141,6 +143,20 @@ the same recording times and also runs `compare()` on the projected trajectories
 limits, stated on the page: a single speed (no Maxwell-Boltzmann distribution, the check is
 reported as informative) and the anisotropy of the square lattice (FHP on a hexagonal lattice
 is the fix; `Space` is the seam).
+
+## Newtonian motion without gravity (`graph/newton.py`)
+
+World 2 of the GUI: a rigid *ball* (the lattice points within a radius, each a walker) with an
+integer velocity in cells per step moves in a straight line (the hops of a step interleaved in
+Bresenham order) and bounces elastically off the wall self-loops: the hit component flips and
+the remaining hops of the step continue, a specular reflection that keeps the shape. `BallRun`
+reports the kinetic energy `k m |v|^2 / 2` (exactly constant), the momentum `k m v` (magnitude
+constant, a component flips only in a step with a bounce) and two entropies on a grid of the
+room: configuration (one frame at cell resolution, `ln k` for a rigid body) and visitation
+(all frames so far on a coarse grid, tending to uniform but not monotone), plus the coverage
+(fraction of grid cells visited, non-decreasing). `run.checks()` turns these into pass/fail rows; `report.live.newton(request)`
+adds SVG charts and the explanation `assets/newton.html`. `tests/test_newton.py` checks the
+straight line, the reflection law, the invariants over a long run and the entropies.
 
 ## Rules as data (`RuleSpec`, `ChainRule`)
 

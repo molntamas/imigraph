@@ -1,0 +1,37 @@
+<h3>How the bouncing ball works</h3>
+<p>The <em>ball</em> is a rigid object made of several walker nodes: every lattice point with
+<code>i&sup2; + j&sup2; &le; r&sup2;</code> around its centre, each one a walker attached to a site of the room. All walkers
+share one velocity <code>v = (v<sub>x</sub>, v<sub>y</sub>)</code> in cells per step. One step moves every walker
+<code>|v<sub>x</sub>|</code> edges along the sign of <code>v<sub>x</sub></code> and <code>|v<sub>y</sub>|</code> edges along the sign of
+<code>v<sub>y</sub></code>, the hops interleaved so that the lattice path hugs the straight line (the order a line-drawing
+algorithm uses). Between the walls this is free Newtonian motion: constant velocity, a straight line, no force, no friction.</p>
+<p>The <em>walls</em> are the self-loop edges <code>{s,s}</code> of the boundary sites, as everywhere in imigraph. A hop in a
+direction in which any walker of the ball faces a self-loop is a <em>bounce</em>: that velocity component flips sign and
+the hop is taken the other way, and the remaining hops of the step continue with the flipped velocity. That is a
+specular, totally elastic reflection: the angle of incidence equals the angle of reflection, the speed is unchanged, the
+ball keeps its shape (it is rigid: all walkers flip together, so it never folds through itself). The step-by-step
+animation rings the ball in the steps with a bounce.</p>
+<table class="kv">
+<thead><tr><th>quantity</th><th>definition</th><th>what the run must show</th></tr></thead>
+<tbody>
+<tr><th>kinetic energy</th><td><code>E = k m |v|&sup2; / 2</code> for <code>k</code> walkers of mass <code>m</code>, with
+<code>v</code> in units of <code>a/&tau;</code></td><td>identical at every frame: no friction, elastic walls</td></tr>
+<tr><th>momentum</th><td><code>P = k m v</code></td><td><code>|P|</code> identical at every frame; the direction changes only
+in a step with a bounce, where the wall takes <code>2 k m |v<sub>axis</sub>|</code>. In a closed room without gravity
+that is all that can happen to it.</td></tr>
+<tr><th>configuration entropy</th><td>Shannon entropy of the walker positions at one frame, at the resolution of the
+lattice cells</td><td><code>ln k</code> at every frame: a rigid ball of <code>k</code> walkers does not disperse (the
+Brownian walkers of world 1 do, their entropy rises towards the uniform value)</td></tr>
+<tr><th>visitation entropy</th><td>Shannon entropy of all positions seen up to the frame, over a
+<code>bins &times; bins</code> grid of the room</td><td>tends towards
+<code>ln(bins&sup2;)</code> as the ball sweeps the room, stays low on a short periodic orbit (try <code>v = (1, 0)</code>
+against <code>v = (2, 1)</code>). It can dip when the ball revisits a cell, so it is not a monotone quantity.</td></tr>
+<tr><th>coverage</th><td>the fraction of the grid cells visited so far</td><td>never decreases: the monotone companion
+of the visitation entropy, the lattice version of an ergodic sweep</td></tr>
+</tbody>
+</table>
+<p>Compared with the hard-disk gas of the gas report this is the single-body limit: one object, walls only, so the
+energy and the magnitude of the momentum are exact invariants rather than statistical ones. Compared with world 1 the
+difference is the walker: a Brownian walker draws a new direction every step and has no momentum to conserve; a
+lattice-gas walker keeps a unit heading; the ball's walkers carry an integer velocity vector and move as one body.
+Gravity, several balls colliding, and non-integer velocities are the natural next steps.</p>

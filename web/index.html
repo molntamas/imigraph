@@ -56,7 +56,7 @@
 WebAssembly). The first load downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.
 <span id="load-status"></span></p>
 
-<h2>1. Playground: rules, a starting universe, a run</h2>
+<h2>World 1: Brownian and lattice-gas motion on a lattice graph, the playground</h2>
 <div class="card">
 <p>A <em>rule</em> is an edge rewrite: a walker edge <code>{w,s}</code> plus a chain of site edges on the left, the walker
 re-attached to a site of the chain on the right. Edit a rule in the drawing or in the text, both show the same rule.
@@ -201,7 +201,7 @@ where a collision fired in this step).</p>
 </div>
 </div>
 
-<h2>2. Comparison run: does the rule set imitate Brownian motion?</h2>
+<h2>World 1, comparison run: does the rule set imitate Brownian motion?</h2>
 <div class="card">
 <form class="params" id="params" onsubmit="return false;">
   <label>particles <input name="particles" type="number" value="1000" min="2" step="1"></label>
@@ -276,6 +276,45 @@ systems. The occupancy entropy rises towards ln(bins), on average but not monoto
 <div class="card" id="wall-rate-chart"></div>
 <div class="card" id="occupied-chart"></div>
 <div class="card"><pre id="markdown"></pre></div>
+</div>
+
+<h2>World 2: Newtonian motion without gravity, a ball bouncing in a room</h2>
+<div class="card">
+<p>One rigid object made of several walker nodes moves in a straight line with an integer velocity (cells per step) and
+bounces elastically off the walls of the room, seen from above: no gravity, no friction. The run keeps track of the
+kinetic energy, the momentum and two entropies; the checks below say whether they behave as Newton demands.</p>
+<form class="params" id="newton" onsubmit="return false;">
+  <label>room size (sites per side) <input name="size" type="number" value="12" min="4" max="30" step="1"></label>
+  <label>ball radius (0 = one walker) <input name="radius" type="number" value="1" min="0" max="4" step="1"></label>
+  <label>velocity v<sub>x</sub> (cells per step) <input name="vx" type="number" value="2" min="-5" max="5" step="1"></label>
+  <label>velocity v<sub>y</sub> <input name="vy" type="number" value="1" min="-5" max="5" step="1"></label>
+  <label>steps <input name="steps" type="number" value="80" min="1" max="400" step="1"></label>
+  <label>entropy grid (bins per side) <input name="bins" type="number" value="6" min="2" max="12" step="1"></label>
+</form>
+<div class="buttons">
+  <button id="nw-run" class="primary" disabled>Run the ball</button>
+  <span id="nw-status" class="muted"></span>
+</div>
+<p id="nw-error" class="error"></p>
+<div class="row">
+<div>
+<p class="muted">The room, step by step: the ball's walkers (red) with the velocity arrow; a ring marks a step with a bounce.</p>
+<canvas id="nw-canvas" width="520" height="520"></canvas>
+<div class="controls"><button id="nw-play">Play</button><input id="nw-slider" type="range"><span id="nw-label" class="label"></span></div>
+<p id="nw-caption" class="muted"></p>
+<label class="muted">playback speed <input id="nw-speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="nw-speed-label"></span></label>
+</div>
+<div>
+<div id="nw-summary"></div>
+<div id="nw-checks"></div>
+</div>
+</div>
+<div class="row">
+<div id="nw-energy-chart"></div>
+<div id="nw-momentum-chart"></div>
+</div>
+<div id="nw-entropy-chart"></div>
+<div id="nw-docs"></div>
 </div>
 </main>
 

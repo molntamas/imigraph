@@ -14,6 +14,7 @@ import numpy as np
 
 from imigraph.experiments import ExperimentConfig, run_experiment
 from imigraph.graph import SquareLattice, WalkerGraph, walkers_at_node
+from imigraph.graph.newton import NewtonWorld
 from imigraph.graph.rules import DIRECTION_NAMES, rule_from_spec
 from imigraph.graph.world import (
     WalkerSystem,
@@ -22,6 +23,7 @@ from imigraph.graph.world import (
     rules_from_data,
 )
 from imigraph.metrics import StepObserver, occupied_cells
+from imigraph.report import svg
 from imigraph.report.html import (
     _asset,
     _demo_blob,
@@ -287,6 +289,123 @@ def collision_demo() -> dict[str, Any]:
 
 def collision_demo_json() -> str:
     return json.dumps(collision_demo(), separators=(",", ":"))
+
+
+NEWTON_LIMITS = {"size": (4, 30), "radius": (0, 4), "steps": (1, 400)}
+NEWTON_DEFAULTS: dict[str, Any] = {
+    "size": 12,
+    "radius": 1,
+    "vx": 2,
+    "vy": 1,
+    "cx": None,
+    "cy": None,
+    "steps": 80,
+    "mass": 1.0,
+    "spacing": 1.0,
+    "step_time": 1.0,
+    "bins": 6,
+}
+MAX_SPEED = 5
+
+
+def newton(request: dict[str, Any] | None = None) -> dict[str, Any]:
+    """World 2 of the GUI: a rigid ball (``radius``) at ``(cx, cy)`` with velocity
+    ``(vx, vy)`` cells per step in a ``size x size`` room with elastic walls, run for
+    ``steps``. Returns the run (every frame, energy, momentum, entropies), the conservation
+    checks, SVG charts and the explanation, or ``{"error": message}``."""
+    options: dict[str, Any] = {**NEWTON_DEFAULTS, **(request or {})}
+    for key, (low, high) in NEWTON_LIMITS.items():
+        options[key] = int(min(max(int(options[key]), low), high))
+    spacing, step_time = float(options["spacing"]), float(options["step_time"])
+    bins = int(min(max(int(options["bins"]), 2), 12))
+    size = options["size"]
+    try:
+        vx, vy = int(options["vx"]), int(options["vy"])
+        if max(abs(vx), abs(vy)) > MAX_SPEED:
+            raise ValueError(
+                f"velocity components must be at most {MAX_SPEED} cells/step"
+            )
+        centre = (
+            size // 2 if options["cx"] is None else int(options["cx"]),
+            size // 2 if options["cy"] is None else int(options["cy"]),
+        )
+        world = NewtonWorld(SquareLattice(size, spacing), step_time)
+        ball = world.place(centre, (vx, vy), options["radius"], float(options["mass"]))
+    except (ValueError, KeyError, TypeError) as error:
+        return {"error": str(error)}
+    run = world.run(ball, options["steps"])
+    data = run.to_dict(bins)
+    times = run.times
+    momentum_series = run.momentum()
+    norm = np.linalg.norm(momentum_series, axis=1)
+    charts = {
+        "energy": svg.line_chart(
+            [svg.Series("kinetic energy", times, run.energy(), svg.REFERENCE_COLOR)],
+            "Kinetic energy E = k m |v|^2 / 2",
+            "time",
+            "E",
+        ),
+        "momentum": svg.line_chart(
+            [
+                svg.Series("P_x", times, momentum_series[:, 0], svg.REFERENCE_COLOR),
+                svg.Series("P_y", times, momentum_series[:, 1], svg.CANDIDATE_COLOR),
+                svg.Series("|P|", times, norm, "#374151", dashed=True),
+            ],
+            "Momentum P = k m v (flips a component at a wall, keeps its magnitude)",
+            "time",
+            "P",
+        ),
+        "entropy": svg.line_chart(
+            [
+                svg.Series(
+                    "configuration (one frame, cell resolution): ln k",
+                    times,
+                    np.asarray(data["configuration_entropy"]),
+                    svg.CANDIDATE_COLOR,
+                ),
+                svg.Series(
+                    "visitation (all frames so far)",
+                    times,
+                    np.asarray(data["visitation_entropy"]),
+                    svg.REFERENCE_COLOR,
+                ),
+                svg.Series(
+                    f"uniform ln({bins}^2)",
+                    times,
+                    np.full(times.shape, np.log(bins * bins)),
+                    "#9ca3af",
+                    dashed=True,
+                ),
+            ],
+            f"Entropy over a {bins}x{bins} grid of the room (nats)",
+            "time",
+            "S",
+        ),
+    }
+    return {
+        "error": None,
+        "run": data,
+        "checks": run.checks(bins),
+        "charts": charts,
+        "docs": _asset("newton.html"),
+        "summary": {
+            "walkers": run.num_walkers,
+            "bounces": int(run.bounces.sum()),
+            "energy": float(run.energy()[0]),
+            "momentum_norm": float(norm[0]),
+            "coverage": float(data["coverage"][-1]),
+            "velocity": [vx, vy],
+            "centre": list(centre),
+            "radius": options["radius"],
+            "size": size,
+            "steps": options["steps"],
+            "bins": bins,
+        },
+    }
+
+
+def newton_json(request_json: str = "{}") -> str:
+    return json.dumps(newton(json.loads(request_json)), separators=(",", ":"))
 
 
 def playground_json(request_json: str = "{}") -> str:
