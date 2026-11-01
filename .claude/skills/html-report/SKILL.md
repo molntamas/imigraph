@@ -44,10 +44,17 @@ shared consumer.
   update it when the answers change (graph type, node types, how energy/momentum/entropy are
   computed, what collisions do).
 - **Playground**: `imigraph.report.live.playground(request)` runs a small world from a
-  starting universe (`size`, `walls`, `walkers`, `placement`, `sites`) with a rule set (one
-  `RuleSpec` or a list) and returns the demo (with matched chains), the rule descriptions (each
-  with an SVG `pattern`), the resolved `universe`, measured vs predicted drift/diffusion, or
-  `{"error": message}` for an unsupported rule or universe. `web/app.js` keeps the rule list
+  starting universe (`size`, `walls`, `walkers`, `placement`, `sites`), a walker model
+  (`walker_model` edge / hyperedge, `collisions` none / hpp, `heading` of hyperedge walkers;
+  see `graph/world.py`) and a rule set (`RuleSpec` JSON and built-in entries, a list) and
+  returns the demo (matched chains, and `directions` + `collisions` per frame for hyperedge
+  walkers), the rule descriptions (Collide first when on, each with an SVG `pattern` and the
+  author's `description`), the `model`, the `docs` (the HTML of `assets/collisions.html`, the
+  explanation of walker models and collisions shown under the rules table on the GUI and the
+  saved page), the resolved `universe`, measured vs predicted drift/diffusion (plus blocked
+  hops and collision counts for hyperedge walkers), or `{"error": message}` for an
+  unsupported rule or universe. `viz.js` draws hyperedge walkers with `drawArrows` and the
+  collision sites with `drawCollisionMarks`. `web/app.js` keeps the rule list
   (`library`, persisted in `localStorage`), the graphical editor (`pattern`, `renderPattern`,
   `clickNode`; same layout as `svg.pattern_layout`), the text editor (`editorChanged`), the
   universe canvas (`drawUniverse`), export / import (rule, rule set, session) and *Save result

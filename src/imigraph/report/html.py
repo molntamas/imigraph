@@ -71,6 +71,10 @@ def _demo_blob(demo: GraphHistory) -> dict[str, Any]:
         "times": _rounded(demo.times, 4),
         "anchors": demo.anchors.tolist(),
         "paths": None if demo.paths is None else demo.paths.tolist(),
+        "directions": None if demo.directions is None else demo.directions.tolist(),
+        "collisions": None
+        if demo.collisions is None
+        else [sites.tolist() for sites in demo.collisions],
         "space": {
             "coordinates": _rounded(space.coordinates),
             "edges": space.edges().tolist(),
@@ -129,8 +133,14 @@ def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
 def _rules_table(rules: list[dict[str, str]]) -> str:
     rows = []
     for rule in rules:
+        description = rule.get("description", "")
+        name = escape(rule["name"]) + (
+            f'<br><span class="muted description">{escape(description)}</span>'
+            if description
+            else ""
+        )
         rows.append(
-            f"<tr><th>{escape(rule['name'])}</th><td><code>{escape(rule['rewrite'])}</code></td>"
+            f"<tr><th>{name}</th><td><code>{escape(rule['rewrite'])}</code></td>"
             f"<td>{escape(rule['matches'])}</td><td>{escape(rule['choice'])}</td>"
             f"<td>{escape(rule['invariants'])}</td><td>{escape(rule['physics'])}</td>"
             f'<td class="pattern">{rule.get("pattern", "")}</td></tr>'

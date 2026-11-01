@@ -40,8 +40,14 @@ it at the chosen playback speed and compares measured drift, diffusion and wall 
 rules' prediction; *Save result page* downloads one self-contained HTML page of the run, and
 *Export session JSON* the file that reproduces it from the command line:
 
+The *walker model* (edge walkers that never interact, or hyperedge walkers with a heading and
+the exclusion principle) and the *collisions* (none, or the HPP collision of the lattice gas)
+are part of the rule configuration; the built-in rules Stream and Reflect with hpp collisions
+are the lattice gas. Every rule has a description. The page explains the models and collisions.
+
 ```bash
 docker compose run --rm dev uv run python -m imigraph playground-report --request-file docs/examples/playground-session.json --label my-rules
+docker compose run --rm dev uv run python -m imigraph playground-report --request-file docs/examples/lattice-gas-session.json --label lattice-gas
 docker compose run --rm dev uv run python -m imigraph report --rule '[{"name":"Hop","notation":"{w,s}, {s,t} -> {w,t}, {s,t}"}]'
 ```
 

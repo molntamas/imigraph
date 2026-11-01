@@ -68,12 +68,38 @@ per frame); walker nodes are drawn next to their anchor with their edge (`viz.js
   playground shows measured vs predicted. A new rule family needs the same: derive, then test.
 - Rule diagrams need the matched chains: `GraphSimulation.run(record_paths=True)` for rules
   that implement `apply_with_paths`.
+- Every `RuleSpec` has a free-text `description` (JSON key `description`, shown in the rule
+  tables and the GUI library); keep it when adding fields to the JSON form.
+
+## Walker models and collisions (`graph/world.py`)
+
+`WalkerSystem(space, rules, walker_model, collisions, step_time)` is the playground's system
+and unites the two walker models under one rule set:
+
+- `walker_model="edge"`: walkers `{w,s}` (`WalkerGraph`), no interaction, chain rules only
+  (equivalent to `RuleSequence`).
+- `walker_model="hyperedge"`: walkers `{w,s,s'}` (`LatticeGasState`), exclusion principle.
+  A chain rule's last hop sets the heading; the built-in rules `BuiltinRule("stream")` and
+  `BuiltinRule("reflect")` (JSON `{"builtin": "stream", "name": ..., "description": ...}`)
+  follow the heading. Every rule's proposal goes through `resolve_exclusion`: stayers keep
+  their channel, clashes have one winner (random), jams propagate, trains move together.
+  `blocked` hops are counted and reported.
+- `collisions="hpp"` runs `LatticeGas.collide` first in every step (hyperedge walkers only);
+  Reflect + Stream + hpp reproduces `LatticeGas` step for step (`tests/test_world.py`).
+- `rules_from_data(list)` builds the rule tuple from the request's `rule` list;
+  `system.descriptions()` lists Collide (if on), every rule and the set, each with a pattern.
+
+A new collision type: add it to `COLLISIONS`, apply it in `WalkerSystem.step` before the
+rules, describe it in `COLLISION_TEXT` and `descriptions()`, document it in
+`report/assets/collisions.html` (shown in the GUI and on the saved page), and test that the
+exclusion still holds every step. A new walker model needs its own state class, an
+`initial_state`, and a decision for every existing rule kind.
 
 ## Conserving rules: the lattice gas (`graph/gas.py`)
 
 Walkers with a heading are hyperedges `{w, s, s'}` (`LatticeGasState`: `sites`,
 `directions`); rules Collide / Reflect / Stream (HPP) conserve momentum and energy and keep one
-walker per channel. When adding a conserving rule: state the conserved quantity in the
+walker per channel. The same rules are available in the playground through `graph/world.py`. When adding a conserving rule: state the conserved quantity in the
 docstring, keep the exclusion invariant (`tests/test_lattice_gas.py` checks it every step),
 return a `GasRun` so the gas checks apply, and describe the rules in `RULES` for the page.
 
