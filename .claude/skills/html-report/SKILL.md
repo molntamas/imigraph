@@ -65,11 +65,14 @@ shared consumer.
   universe canvas (`drawUniverse`), export / import (rule, rule set, session) and *Save result
   page* (`live.playground_page_json`, a Blob download). "Use the rule set in the comparison
   run" writes the JSON list into the hidden `rule` field of the run form.
-- **World 2, the bouncing ball** (`live.newton(request)`, GUI section "World 2"): a rigid
-  ball with an integer velocity in a room with elastic walls; returns the run (`run.sites`,
-  `velocities`, `bounces`, `energy`, `momentum`, the two entropies), `checks` (pass/fail rows),
-  `charts` (SVG) and `docs` (`assets/newton.html`). `web/app.js` draws it in `renderNewton`;
-  the form `#newton` reruns on change. Not part of the saved playground page.
+- **Balls bouncing in a room** (`live.balls(request)`, GUI section of that name): the ball
+  gas (`experiments/balls.py`) next to the hard-disk reference from the same start; returns
+  `data` (`report.balls.ball_page_data`: the graph run with sites per ball, centres,
+  velocities, events, captions; the reference positions), `fragments`
+  (`report.balls.ball_fragments`: checks tables, comparison table, charts), `docs`
+  (`assets/balls.html`) and a `summary`. `web/app.js` draws the graph, the projection and the
+  reference in `renderBalls`; the form `#balls` reruns on change. `live.newton` (one ball,
+  `assets/newton.html`) stays as the single-ball core without a GUI section.
 - **Playground page** (`imigraph.report.playground`, template `assets/playground.html`,
   `python -m imigraph playground-report --request-file session.json`): rules table with
   patterns, universe table and canvas, the two animations, measured vs predicted, the session

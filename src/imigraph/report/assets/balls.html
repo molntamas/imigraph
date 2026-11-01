@@ -1,0 +1,40 @@
+<h3>How the ball gas works, and how it is held against the reference</h3>
+<p>Each <em>ball</em> is one walker node (radius 0) or the lattice points within a radius, attached to sites of the room,
+with an integer velocity <code>(v<sub>x</sub>, v<sub>y</sub>)</code> in cells per step. Between contacts a ball moves as the
+single bouncing ball does: a straight line hop by hop, and a specular, elastic bounce when a hop would enter a wall
+self-loop. All balls hop in rounds, one hop each, so a fast ball takes more rounds than a slow one.</p>
+<p>After every round the balls are checked for <em>contact</em>: two balls sharing a site, or two balls that crossed each
+other along an edge. What happens then is the <em>collision rule</em>, chosen above:</p>
+<table class="kv">
+<thead><tr><th>rule</th><th>what happens at a contact</th><th>conserves</th></tr></thead>
+<tbody>
+<tr><th>exchange</th><td>the elastic collision of equal masses. The line of centres before the hop is a lattice direction
+<code>d</code>, an axis or a diagonal. The velocity component along <code>d</code> is exchanged:
+<code>v<sub>a</sub>' = v<sub>a</sub> &minus; &delta; d</code>, <code>v<sub>b</sub>' = v<sub>b</sub> + &delta; d</code> with
+<code>&delta; = (v<sub>a</sub> &minus; v<sub>b</sub>)&middot;d / d&middot;d</code>. Along an axis <code>&delta;</code> is an
+integer and the result is exact. Along a diagonal <code>d&middot;d = 2</code>, and when
+<code>(v<sub>a</sub> &minus; v<sub>b</sub>)&middot;d</code> is odd the exact result is not a lattice velocity: the balls then
+swap their whole velocity vectors instead (the head-on outcome). These <em>fallback</em> collisions are counted and shown;
+they conserve momentum and energy exactly but scatter at the wrong angle. Separating pairs do not collide.</td>
+<td>momentum and energy, exactly</td></tr>
+<tr><th>swap</th><td>the balls always exchange their whole velocity vectors, whatever the geometry: every hit is treated as
+head-on.</td><td>momentum and energy, exactly</td></tr>
+<tr><th>none</th><td>the balls pass through each other: an ideal gas of points. Sites may be shared.</td>
+<td>momentum and energy (nothing happens)</td></tr>
+</tbody>
+</table>
+<p>Under <em>exchange</em> and <em>swap</em> the hop that produced the contact is undone for both balls, so no two balls ever
+share a site, and the balls continue the step with their new velocities. Later, particles made of several nodes and
+edges may carry their own collision rules; the rule is a configuration of the gas for that reason.</p>
+<h3>The reference: a hard-disk gas</h3>
+<p>The traditional simulation is the hard-disk gas of the gas report: disks in continuous space moving in straight
+lines, elastic collisions that exchange the velocity components along the line of centres, specular walls, integrated
+with a small time step. It starts <em>exactly</em> where the balls start, with the balls' velocities, with a disk covering
+each ball's cells, and it is recorded at the lattice steps, so the 2D projection of the graph system (the ball centres)
+and the reference are compared frame by frame: the same energy and momentum bookkeeping, the same occupancy entropy,
+the same speed distribution, and the distribution checks of the comparison framework (mean squared displacement,
+marginals, occupancy). Where the two differ, the lattice is the reason: the balls' velocities are quantised to
+integers, their collisions happen at lattice sites rather than at the exact contact time, and odd diagonal hits take the
+swap fallback. With few balls the entropy and Maxwell checks are informative only (they are statistical statements
+about many particles); with a single ball the room is the only thing to collide with, which is the bouncing ball of
+before.</p>

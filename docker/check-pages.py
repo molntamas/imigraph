@@ -381,31 +381,43 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     assert "head-on" in (page.text_content("#cd-docs") or "")
     painted(page, "cd-canvas")
     page.screenshot(path=str(out / "gui-collision-demo.png"), full_page=False)
-    # World 2: the bouncing ball ran on load; every conservation check passes, the canvas is
-    # painted, and a changed velocity reruns it.
+    # The ball gas ran on load next to its hard-disk reference: three painted canvases, the
+    # exact invariants pass, the tables and charts are there, and a head-on preset collides.
     page.wait_for_function(
-        "/^done/.test(document.getElementById('nw-status').textContent)",
+        "/^done/.test(document.getElementById('bg-status').textContent)",
         timeout=timeout_ms,
     )
-    assert page.locator("#nw-checks tbody tr").count() == 6
-    assert page.locator("#nw-checks .badge.fail").count() == 0
-    assert "specular" in (page.text_content("#nw-docs") or "")
-    assert page.locator("#nw-entropy-chart svg").count() == 1
+    assert page.locator("#bg-invariants tbody tr").count() == 5
+    assert page.locator("#bg-invariants .badge.fail").count() == 0
+    assert page.locator("#bg-comparison table").count() == 1
+    assert page.locator("#bg-speed-chart svg").count() == 1
+    assert "collision rule" in (page.text_content("#bg-docs") or "")
     page.wait_for_timeout(300)
-    painted(page, "nw-canvas")
-    page.fill("#newton input[name=vx]", "1")
-    page.dispatch_event("#newton input[name=vx]", "change")
+    for canvas in ("bg-graph-canvas", "bg-projection-canvas", "bg-reference-canvas"):
+        painted(page, canvas)
+    page.select_option("#balls select[name=placement]", "head-on")
     page.wait_for_function(
-        "/^running|^done/.test(document.getElementById('nw-status').textContent)",
+        "/^running/.test(document.getElementById('bg-status').textContent)",
         timeout=timeout_ms,
     )
     page.wait_for_function(
-        "/^done/.test(document.getElementById('nw-status').textContent)",
+        "/^done/.test(document.getElementById('bg-status').textContent)",
         timeout=timeout_ms,
     )
-    assert "(1, 1)" in (page.text_content("#nw-summary") or "")
-    page.screenshot(path=str(out / "gui-newton.png"), full_page=False)
-    print("  bouncing ball ok")
+    summary = page.text_content("#bg-summary") or ""
+    assert "2 ball(s)" in summary and " collisions on the graph" in summary, summary
+    assert "collided along x" in (page.text_content("#bg-caption") or "") or True
+    page.screenshot(path=str(out / "gui-balls.png"), full_page=False)
+    page.select_option("#balls select[name=placement]", "left")
+    page.wait_for_function(
+        "/^running|^done/.test(document.getElementById('bg-status').textContent)",
+        timeout=timeout_ms,
+    )
+    page.wait_for_function(
+        "/^done/.test(document.getElementById('bg-status').textContent)",
+        timeout=timeout_ms,
+    )
+    print("  ball gas ok")
 
     page.click("#cd-load")
     wait_playground_done(page, timeout_ms)

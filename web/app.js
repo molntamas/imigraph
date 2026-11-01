@@ -51,8 +51,8 @@
   let customHeadings = null; // one heading per custom site (from the collision demo), or null
   let demoPlayers = [];
   let collisionDemoJson = null;
-  let newtonJson = null;
-  let newtonPlayers = [];
+  let ballsJson = null;
+  let ballPlayers = [];
   let lastResult = null;
   let applyTimer = null;
 
@@ -679,94 +679,104 @@
     }, 20);
   }
 
-  // ---------- world 2: the bouncing ball ----------
+  // ---------- the ball gas against the hard-disk gas ----------
 
-  function newtonRequest() {
+  function ballsRequest() {
     const request = {};
-    for (const [key, value] of new FormData(byId("newton")).entries()) request[key] = parseInt(value, 10);
+    for (const [key, value] of new FormData(byId("balls")).entries()) {
+      request[key] = (key === "rule" || key === "placement") ? value : parseInt(value, 10);
+    }
     return request;
   }
 
-  function renderNewton(result) {
-    newtonPlayers.forEach(function (p) { p.pause(); });
-    newtonPlayers = [];
-    byId("nw-error").textContent = result.error || "";
-    if (result.error) return;
-    const run = result.run, s = result.summary;
-    const vp = V.Viewport(byId("nw-canvas"), run.space.box, 24);
-    newtonPlayers.push(V.Player(run.times.length, function (f) {
-      vp.clear();
-      V.drawSpace(vp, run.space.coordinates, run.space.edges, 3, 1.5 * run.space.spacing);
-      const sites = run.sites[f];
-      const ctx = vp.ctx;
-      ctx.fillStyle = V.COLORS.walker;
-      let cx = 0, cy = 0;
-      for (let w = 0; w < sites.length; w++) {
-        const a = run.space.coordinates[sites[w]];
-        cx += a[0] / sites.length; cy += a[1] / sites.length;
-        ctx.beginPath();
-        ctx.arc(vp.x(a[0]), vp.y(a[1]), Math.max(4, 0.42 * run.space.spacing * vp.scale), 0, 2 * Math.PI);
-        ctx.fill();
-      }
-      if (f > 0 && run.bounces[f - 1] > 0) {
-        ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.arc(vp.x(cx), vp.y(cy), (s.radius + 1) * run.space.spacing * vp.scale, 0, 2 * Math.PI);
-        ctx.stroke();
-      }
-      const v = run.velocities[f];
-      const speed = Math.hypot(v[0], v[1]);
-      if (speed > 0) {
-        const len = (s.radius + 1.2) * run.space.spacing;
-        const x1 = vp.x(cx + len * v[0] / speed), y1 = vp.y(cy + len * v[1] / speed);
-        ctx.strokeStyle = "#374151"; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(vp.x(cx), vp.y(cy)); ctx.lineTo(x1, y1); ctx.stroke();
-        const angle = Math.atan2(y1 - vp.y(cy), x1 - vp.x(cx));
-        ctx.fillStyle = "#374151";
-        ctx.beginPath(); ctx.moveTo(x1, y1);
-        ctx.lineTo(x1 - 9 * Math.cos(angle - 0.5), y1 - 9 * Math.sin(angle - 0.5));
-        ctx.lineTo(x1 - 9 * Math.cos(angle + 0.5), y1 - 9 * Math.sin(angle + 0.5));
-        ctx.closePath(); ctx.fill();
-      }
-      const p = run.momentum[f];
-      byId("nw-caption").textContent = "step " + f + ": v = (" + v[0] + ", " + v[1] + ") cells/step, E = " +
-        fmt(run.energy[f]) + ", P = (" + fmt(p[0]) + ", " + fmt(p[1]) + "), S_config = " + fmt(run.configuration_entropy[f]) +
-        ", S_visit = " + fmt(run.visitation_entropy[f]) + (f > 0 && run.bounces[f - 1] > 0 ? "; bounce: a velocity component flipped at the wall" : "");
-    }, { slider: byId("nw-slider"), button: byId("nw-play"), label: byId("nw-label"),
-         labelFor: function (f) { return "step " + f; }, interval: 400 }));
-    byId("nw-summary").innerHTML = '<table class="kv"><tbody>' +
-      "<tr><th>ball</th><td>" + s.walkers + " walker(s), radius " + s.radius + ", centre (" + s.centre.join(", ") + ")</td></tr>" +
-      "<tr><th>velocity (cells/step)</th><td>(" + s.velocity.join(", ") + ")</td></tr>" +
-      "<tr><th>room</th><td>" + s.size + "×" + s.size + ", reflecting walls, " + s.steps + " steps</td></tr>" +
-      "<tr><th>kinetic energy E</th><td>" + fmt(s.energy) + " (constant)</td></tr>" +
-      "<tr><th>|P|</th><td>" + fmt(s.momentum_norm) + " (constant)</td></tr>" +
-      "<tr><th>bounces</th><td>" + s.bounces + "</td></tr>" +
-      "<tr><th>room covered</th><td>" + Math.round(100 * s.coverage) + "% of the " + s.bins + "×" + s.bins + " entropy grid</td></tr></tbody></table>";
-    byId("nw-checks").innerHTML = '<div class="table-scroll"><table><thead><tr><th>check</th><th>verdict</th><th>evidence</th></tr></thead><tbody>' +
-      result.checks.map(function (c) {
-        return "<tr><th>" + escapeHtml(c.name) + '</th><td><span class="badge ' + (c.passed ? "pass" : "fail") + '">' +
-          (c.passed ? "PASS" : "FAIL") + "</span></td><td>" + escapeHtml(c.detail) + "</td></tr>";
-      }).join("") + "</tbody></table></div>";
-    byId("nw-energy-chart").innerHTML = result.charts.energy;
-    byId("nw-momentum-chart").innerHTML = result.charts.momentum;
-    byId("nw-entropy-chart").innerHTML = result.charts.entropy;
-    byId("nw-docs").innerHTML = result.docs;
-    V.speedControl(byId("nw-speed"), byId("nw-speed-label"), newtonPlayers);
-    newtonPlayers.forEach(function (p) { p.play(); });
+  function drawArrow(ctx, x0, y0, x1, y1, color) {
+    ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+    const angle = Math.atan2(y1 - y0, x1 - x0);
+    ctx.beginPath(); ctx.moveTo(x1, y1);
+    ctx.lineTo(x1 - 8 * Math.cos(angle - 0.5), y1 - 8 * Math.sin(angle - 0.5));
+    ctx.lineTo(x1 - 8 * Math.cos(angle + 0.5), y1 - 8 * Math.sin(angle + 0.5));
+    ctx.closePath(); ctx.fill();
   }
 
-  function runNewton() {
-    if (!newtonJson) return;
-    byId("nw-status").textContent = "running...";
+  function renderBalls(result) {
+    ballPlayers.forEach(function (p) { p.pause(); });
+    ballPlayers = [];
+    byId("bg-error").textContent = result.error || "";
+    if (result.error) return;
+    const g = result.data.graph, r = result.data.reference, s = result.summary;
+    const graph = V.Viewport(byId("bg-graph-canvas"), g.space.box, 20);
+    const projection = V.Viewport(byId("bg-projection-canvas"), g.space.box, 20);
+    const reference = V.Viewport(byId("bg-reference-canvas"), r.box, 20);
+    const diskRadius = r.radius;
+    ballPlayers.push(V.Player(g.times.length, function (f) {
+      graph.clear();
+      V.drawSpace(graph, g.space.coordinates, g.space.edges, 3, 1.5 * g.space.spacing);
+      const ctx = graph.ctx;
+      const collided = {};
+      if (f > 0) g.events[f - 1].forEach(function (e) { if (e.kind === "collision") e.balls.forEach(function (b) { collided[b] = true; }); });
+      for (let b = 0; b < g.sites[f].length; b++) {
+        ctx.fillStyle = V.COLORS.walker;
+        g.sites[f][b].forEach(function (site) {
+          const a = g.space.coordinates[site];
+          ctx.beginPath();
+          ctx.arc(graph.x(a[0]), graph.y(a[1]), Math.max(4, 0.3 * g.space.spacing * graph.scale), 0, 2 * Math.PI);
+          ctx.fill();
+        });
+        const c = g.centres[f][b], v = g.velocities[f][b], speed = Math.hypot(v[0], v[1]);
+        if (speed > 0) {
+          const len = (g.radius_cells + 0.9) * g.space.spacing;
+          drawArrow(ctx, graph.x(c[0]), graph.y(c[1]), graph.x(c[0] + len * v[0] / speed), graph.y(c[1] + len * v[1] / speed), "#374151");
+        }
+        if (collided[b]) {
+          ctx.strokeStyle = "#f59e0b"; ctx.lineWidth = 3;
+          ctx.beginPath();
+          ctx.arc(graph.x(c[0]), graph.y(c[1]), (g.radius_cells + 0.8) * g.space.spacing * graph.scale, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
+      }
+      projection.clear();
+      V.drawParticles(projection, g.centres[f], V.COLORS.candidate, diskRadius * projection.scale);
+      reference.clear();
+      V.drawParticles(reference, r.positions[f], V.COLORS.reference, diskRadius * reference.scale);
+      byId("bg-caption").textContent = g.captions.length ? g.captions[f] : "";
+    }, { slider: byId("bg-slider"), button: byId("bg-play"), label: byId("bg-label"),
+         labelFor: function (f) { return "step " + f + " (t = " + Number(g.times[f]).toFixed(3) + ")"; }, interval: 350 }));
+    const verdict = byId("bg-verdict");
+    verdict.textContent = s.passed ? "PASS" : "FAIL";
+    verdict.className = "badge " + (s.passed ? "pass" : "fail");
+    byId("bg-summary").textContent = s.balls + " ball(s) of " + s.walkers_per_ball + " node(s), rule " + s.rule + ", " +
+      s.collisions + " collisions on the graph (" + s.fallbacks + " swap fallbacks), " + s.bounces + " wall bounces; " +
+      s.reference_collisions + " collisions in the reference. Graph checks " + (s.graph_passed ? "pass" : "fail") +
+      ", reference checks " + (s.reference_passed ? "pass" : "fail") + ".";
+    const fr = result.fragments;
+    byId("bg-invariants").innerHTML = fr.graph_invariants_table;
+    byId("bg-graph-checks").innerHTML = fr.graph_checks_table;
+    byId("bg-reference-checks").innerHTML = fr.reference_checks_table;
+    byId("bg-comparison").innerHTML = fr.comparison_table;
+    byId("bg-energy-chart").innerHTML = fr.energy_chart;
+    byId("bg-momentum-chart").innerHTML = fr.momentum_chart;
+    byId("bg-entropy-chart").innerHTML = fr.entropy_chart;
+    byId("bg-collisions-chart").innerHTML = fr.collisions_chart;
+    byId("bg-speed-chart").innerHTML = fr.speed_chart;
+    byId("bg-occupancy").innerHTML = fr.occupancy_charts;
+    byId("bg-docs").innerHTML = result.docs;
+    V.speedControl(byId("bg-speed"), byId("bg-speed-label"), ballPlayers);
+    ballPlayers.forEach(function (p) { p.play(); });
+  }
+
+  function runBalls() {
+    if (!ballsJson) return;
+    byId("bg-status").textContent = "running the balls and the reference...";
     setTimeout(function () {
       try {
         const started = performance.now();
-        const result = JSON.parse(newtonJson(JSON.stringify(newtonRequest())));
-        renderNewton(result);
-        byId("nw-status").textContent = (result.error ? "not run" : "done") + " in " + ((performance.now() - started) / 1000).toFixed(2) + " s";
+        const result = JSON.parse(ballsJson(JSON.stringify(ballsRequest())));
+        renderBalls(result);
+        byId("bg-status").textContent = (result.error ? "not run" : "done") + " in " + ((performance.now() - started) / 1000).toFixed(2) + " s";
       } catch (error) {
-        byId("nw-error").textContent = "error: " + error;
-        byId("nw-status").textContent = "failed";
+        byId("bg-error").textContent = "error: " + error;
+        byId("bg-status").textContent = "failed";
         console.error(error);
       }
     }, 20);
@@ -976,8 +986,8 @@
     playgroundJson = live.playground_json;
     playgroundPageJson = live.playground_page_json;
     collisionDemoJson = live.collision_demo_json;
-    newtonJson = live.newton_json;
-    byId("nw-run").disabled = false;
+    ballsJson = live.balls_json;
+    byId("bg-run").disabled = false;
     status("ready (" + wheel + ")");
     byId("load-status").textContent = "Python is ready.";
     byId("run").textContent = "Run";
@@ -987,7 +997,7 @@
     setTimeout(function () {
       try { renderCollisionDemo(JSON.parse(collisionDemoJson())); }
       catch (error) { byId("cd-caption").textContent = "could not run the collision demo: " + error; console.error(error); }
-      runNewton();
+      runBalls();
     }, 60);
   }
 
@@ -1062,9 +1072,9 @@
     });
   });
   byId("run").addEventListener("click", run);
-  byId("nw-run").addEventListener("click", runNewton);
-  Array.prototype.forEach.call(byId("newton").elements, function (element) {
-    element.addEventListener("change", runNewton);
+  byId("bg-run").addEventListener("click", runBalls);
+  Array.prototype.forEach.call(byId("balls").elements, function (element) {
+    element.addEventListener("change", runBalls);
   });
   loadPython().catch(function (error) {
     status("failed to load Python: " + error);

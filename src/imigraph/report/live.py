@@ -13,6 +13,8 @@ from typing import Any
 import numpy as np
 
 from imigraph.experiments import ExperimentConfig, run_experiment
+from imigraph.experiments.balls import PLACEMENTS as BALL_PLACEMENTS
+from imigraph.experiments.balls import BallGasConfig, run_ball_comparison
 from imigraph.graph import SquareLattice, WalkerGraph, walkers_at_node
 from imigraph.graph.newton import NewtonWorld
 from imigraph.graph.rules import DIRECTION_NAMES, rule_from_spec
@@ -402,6 +404,84 @@ def newton(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "bins": bins,
         },
     }
+
+
+BALL_LIMITS = {
+    "size": (4, 20),
+    "balls": (1, 20),
+    "radius": (0, 2),
+    "max_speed": (0, 4),
+    "steps": (1, 300),
+    "entropy_bins": (2, 10),
+}
+BALL_DEFAULTS: dict[str, Any] = {
+    "size": 10,
+    "balls": 6,
+    "radius": 0,
+    "max_speed": 2,
+    "steps": 80,
+    "seed": 0,
+    "entropy_bins": 5,
+    "rule": "exchange",
+    "placement": "left",
+}
+
+
+def balls(request: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The ball gas section of the GUI: several rigid balls with integer velocities in a room,
+    a configurable collision rule, run next to the hard-disk gas from the same start. Returns
+    the page data of both systems (:func:`~imigraph.report.balls.ball_page_data`), the SVG
+    fragments, the explanation and a summary, or ``{"error": message}``."""
+    from imigraph.report.balls import ball_fragments, ball_page_data
+
+    options: dict[str, Any] = {**BALL_DEFAULTS, **(request or {})}
+    for key, (low, high) in BALL_LIMITS.items():
+        options[key] = int(min(max(int(options[key]), low), high))
+    try:
+        if options["placement"] not in BALL_PLACEMENTS:
+            raise ValueError(f"placement must be one of {', '.join(BALL_PLACEMENTS)}")
+        if options["placement"] in ("head-on", "diagonal"):
+            options["balls"] = 2
+        config = BallGasConfig(
+            size=options["size"],
+            balls=options["balls"],
+            radius=options["radius"],
+            max_speed=options["max_speed"],
+            steps=options["steps"],
+            seed=int(options["seed"]),
+            entropy_bins=options["entropy_bins"],
+            rule=str(options["rule"]),
+            placement=str(options["placement"]),
+        )
+        comparison = run_ball_comparison(config)
+    except (ValueError, KeyError, TypeError) as error:
+        return {"error": str(error)}
+    run = comparison.balls.run
+    return {
+        "error": None,
+        "data": ball_page_data(comparison),
+        "fragments": ball_fragments(comparison),
+        "docs": _asset("balls.html"),
+        "summary": {
+            "rule": config.rule,
+            "placement": config.placement,
+            "balls": config.balls,
+            "walkers_per_ball": run.walkers_per_ball,
+            "size": config.size,
+            "steps": config.steps,
+            "collisions": int(run.collisions.sum()),
+            "fallbacks": int(run.fallbacks.sum()),
+            "bounces": int(run.bounces.sum()),
+            "reference_collisions": int(comparison.gas.run.collisions.sum()),
+            "passed": comparison.passed,
+            "graph_passed": comparison.balls.passed,
+            "reference_passed": comparison.gas.passed,
+        },
+    }
+
+
+def balls_json(request_json: str = "{}") -> str:
+    return json.dumps(balls(json.loads(request_json)), separators=(",", ":"))
 
 
 def newton_json(request_json: str = "{}") -> str:
