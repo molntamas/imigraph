@@ -43,6 +43,7 @@ with the repository bind-mounted:
 docker compose build dev                                        # once, or after .sandcastle/Dockerfile changes
 docker compose run --rm dev uv run pytest                       # tests
 docker compose run --rm dev uv run ruff check .                 # lint
+docker compose run --rm dev uv run ty check                     # type check
 docker compose run --rm dev pre-commit run --all-files          # secret scan + lint + format
 docker compose run --rm dev bash -c 'git add -A && git commit -m "..."'   # commit with hooks
 docker compose run --rm dev                                     # interactive shell
@@ -61,6 +62,7 @@ works inside sandcastle sessions, which have no Docker: `uv run python docker/ch
 uv sync                                               # Python 3.14 + dependencies into .venv
 uv run pytest
 uv run ruff check . && uv run ruff format --check .
+uv run ty check
 pre-commit install                                    # once per clone: secret scan + lint on commit
 ```
 
@@ -203,7 +205,7 @@ For each issue:
 2. A branch `ai/issue-<n>` is created from the freshly fetched `origin/main`, checked out in
    `.sandcastle/worktrees/ai-issue-<n>` and mounted into a new container.
 3. Claude Code gets `.sandcastle/prompt.md` with the issue text and your comments on the issue.
-4. The agent reads `CLAUDE.md`, writes tests first, implements, runs pytest and ruff, commits
+4. The agent reads `CLAUDE.md`, writes tests first, implements, runs pytest, ruff and ty, commits
    (pre-commit and the secret scan run), pushes the branch, opens a pull request with
    `Closes #<n>`, relabels the issue `sandcastle:in-review` and comments with the link.
 5. If it cannot finish, it labels the issue `sandcastle:blocked` and explains why in a comment. If

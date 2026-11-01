@@ -23,13 +23,17 @@ def test_lattice_matches_networkx_grid_graph():
     actual = nx.Graph(map(tuple, lattice.edges()))
     relabel = {(i, j): lattice.node_index(i, j) for i, j in expected.nodes}
     assert nx.utils.graphs_equal(nx.relabel_nodes(expected, relabel), actual)
-    np.testing.assert_allclose(lattice.coordinates[lattice.node_index(2, 3)], [1.0, 1.5])
+    np.testing.assert_allclose(
+        lattice.coordinates[lattice.node_index(2, 3)], [1.0, 1.5]
+    )
 
 
 def test_every_node_has_four_hop_options_with_self_loops_at_the_boundary():
     lattice = SquareLattice(size=5)
     graph = lattice.to_networkx()
-    boundary = {node for node in graph if graph.degree(node) < 4 or graph.has_edge(node, node)}
+    boundary = {
+        node for node in graph if graph.degree(node) < 4 or graph.has_edge(node, node)
+    }
     assert boundary == {n for n in range(25) if 0 in divmod(n, 5) or 4 in divmod(n, 5)}
     assert all(graph.has_edge(node, node) for node in boundary)
     assert lattice.neighbors.shape == (25, 4)
@@ -84,8 +88,12 @@ def test_run_records_frames_and_is_reproducible():
     lattice = SquareLattice(size=7)
     simulation = GraphSimulation(lattice, step_time=0.1)
     initial = walkers_at_node(lattice, lattice.center_node, 3)
-    first = simulation.run(initial, steps=10, rng=np.random.default_rng(1), record_every=5)
-    second = simulation.run(initial, steps=10, rng=np.random.default_rng(1), record_every=5)
+    first = simulation.run(
+        initial, steps=10, rng=np.random.default_rng(1), record_every=5
+    )
+    second = simulation.run(
+        initial, steps=10, rng=np.random.default_rng(1), record_every=5
+    )
     assert first.anchors.shape == (3, 3)
     np.testing.assert_allclose(first.times, [0.0, 0.5, 1.0])
     np.testing.assert_array_equal(first.anchors, second.anchors)
@@ -118,4 +126,9 @@ def test_history_to_dict_is_json_like():
     )
     data = history.to_dict()
     assert len(data["anchors"]) == 3 and len(data["space"]["coordinates"]) == 4
-    assert sorted(map(tuple, data["space"]["edges"])) == [(0, 1), (0, 2), (1, 3), (2, 3)]
+    assert sorted(map(tuple, data["space"]["edges"])) == [
+        (0, 1),
+        (0, 2),
+        (1, 3),
+        (2, 3),
+    ]

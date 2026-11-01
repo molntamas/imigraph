@@ -22,17 +22,20 @@ from imigraph.experiments import ExperimentConfig, run_experiment
 from imigraph.experiments.gas import GasConfig, LatticeGasConfig, run_gas_comparison
 
 SCALARS = (int, float, str, bool)
+ConfigClass = type[ExperimentConfig] | type[GasConfig] | type[LatticeGasConfig]
 
 
 def add_config_options(
-    parser: argparse.ArgumentParser, config_class: type, prefix: str = ""
+    parser: argparse.ArgumentParser, config_class: ConfigClass, prefix: str = ""
 ) -> None:
     defaults = config_class()
     for field in fields(config_class):
         default = getattr(defaults, field.name)
         name = f"--{prefix}{field.name.replace('_', '-')}"
         if field.name == "rule":
-            parser.add_argument(name, type=json.loads, default=None, help="rule spec as JSON")
+            parser.add_argument(
+                name, type=json.loads, default=None, help="rule spec as JSON"
+            )
         elif isinstance(default, SCALARS) and not isinstance(default, bool):
             parser.add_argument(
                 name, type=type(default), default=default, help=f"default {default}"
@@ -68,7 +71,9 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def config_from(args: argparse.Namespace, config_class: type, prefix: str = "") -> Any:
+def config_from(
+    args: argparse.Namespace, config_class: ConfigClass, prefix: str = ""
+) -> Any:
     values = {}
     for field in fields(config_class):
         name = f"{prefix}{field.name}"
@@ -81,7 +86,8 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command.startswith("gas"):
         result = run_gas_comparison(
-            config_from(args, GasConfig), config_from(args, LatticeGasConfig, prefix="lattice_")
+            config_from(args, GasConfig),
+            config_from(args, LatticeGasConfig, prefix="lattice_"),
         )
         print(result.gas.report.to_markdown())
         print()

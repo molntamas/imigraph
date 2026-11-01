@@ -79,7 +79,9 @@ class SquareLattice:
         if self.size < 1:
             raise ValueError("size must be >= 1")
         if self.periodic and self.size < 3:
-            raise ValueError("a periodic lattice needs size >= 3 (distinct +x and -x neighbours)")
+            raise ValueError(
+                "a periodic lattice needs size >= 3 (distinct +x and -x neighbours)"
+            )
         if self.spacing <= 0:
             raise ValueError("spacing must be > 0")
 
@@ -160,6 +162,8 @@ class SquareLattice:
         for node, (x, y) in enumerate(self.coordinates):
             graph.add_node(node, pos=(float(x), float(y)))
         graph.add_edges_from(map(tuple, self.edges()))
-        loops = np.flatnonzero(np.any(self.neighbors == np.arange(self.num_nodes)[:, None], axis=1))
+        loops = np.flatnonzero(
+            np.any(self.neighbors == np.arange(self.num_nodes)[:, None], axis=1)
+        )
         graph.add_edges_from((int(node), int(node)) for node in loops)
         return graph

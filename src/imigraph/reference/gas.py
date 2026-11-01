@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 import numpy as np
+from numpy.typing import ArrayLike
 
 from imigraph.trajectory import Box, Trajectory
 
@@ -78,7 +79,9 @@ class HardDiskGas:
 
     # ---------- initial conditions ----------
 
-    def grid_in_region(self, count: int, lower: np.ndarray, upper: np.ndarray) -> np.ndarray:
+    def grid_in_region(
+        self, count: int, lower: np.ndarray, upper: np.ndarray
+    ) -> np.ndarray:
         """``count`` non-overlapping positions on a grid inside ``[lower, upper]``."""
         lower = np.asarray(lower, dtype=float) + self.radius
         upper = np.asarray(upper, dtype=float) - self.radius
@@ -86,7 +89,9 @@ class HardDiskGas:
         columns = max(1, int(np.ceil(np.sqrt(count * side[0] / side[1]))))
         rows = int(np.ceil(count / columns))
         if min(side[0] / columns, side[1] / rows) < 2 * self.radius:
-            raise ValueError(f"{count} disks of radius {self.radius} do not fit into the region")
+            raise ValueError(
+                f"{count} disks of radius {self.radius} do not fit into the region"
+            )
         xs = lower[0] + (np.arange(columns) + 0.5) * side[0] / columns
         ys = lower[1] + (np.arange(rows) + 0.5) * side[1] / rows
         grid = np.array([(x, y) for y in ys for x in xs])
@@ -140,7 +145,9 @@ class HardDiskGas:
             return 0
         i, j = i[close], j[close]
         count = 0
-        for a, b in zip(i, j, strict=True):  # sequential: a disk may be in several pairs
+        for a, b in zip(
+            i, j, strict=True
+        ):  # sequential: a disk may be in several pairs
             sep = d[a, b]
             dist = float(np.linalg.norm(sep))
             if dist == 0.0:
@@ -159,8 +166,8 @@ class HardDiskGas:
 
     def simulate(
         self,
-        positions: np.ndarray,
-        velocities: np.ndarray,
+        positions: ArrayLike,
+        velocities: ArrayLike,
         steps: int,
         record_every: int = 1,
     ) -> GasRun:
@@ -177,7 +184,9 @@ class HardDiskGas:
             x += v * self.dt
             self._apply_walls(x, v)
             interval_collisions += self._collide(x, v)
-            self._apply_walls(x, v)  # overlap removal may have pushed a disk into a wall
+            self._apply_walls(
+                x, v
+            )  # overlap removal may have pushed a disk into a wall
             if step % record_every == 0:
                 frames.append(x.copy())
                 speeds.append(v.copy())

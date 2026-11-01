@@ -8,7 +8,7 @@ turn into pull requests (see `README.md`).
 ## Stack
 
 - Python 3.14, managed with [uv](https://docs.astral.sh/uv/). Core libraries: numpy, scipy, networkx.
-- Tests: pytest. Lint/format: ruff. Secret scanning: betterleaks via pre-commit.
+- Tests: pytest. Lint/format: ruff. Type checking: ty. Secret scanning: betterleaks via pre-commit.
 - Source in `src/imigraph/`, tests in `tests/`.
 - Browser GUI: PyScript/Pyodide, static files under `web/` (not created yet).
 
@@ -18,9 +18,27 @@ turn into pull requests (see `README.md`).
 uv sync                                               # install deps (dev group included)
 uv run pytest                                         # tests
 uv run ruff check . && uv run ruff format --check .   # lint + format check
+uv run ty check                                       # type check
 uv add <package>                                      # add a dependency (pyproject.toml + uv.lock)
 pre-commit run --all-files                            # what the commit hook runs
 ```
+
+## Required checks
+
+Before every commit, and before a pull request is opened, all of these must pass with the
+default configuration of each tool (`pyproject.toml` only adds the EXE002 exception explained
+there):
+
+- `uv run ruff check .` - lint, fix findings rather than silencing them;
+- `uv run ruff format --check .` - formatting (`uv run ruff format .` rewrites the files);
+- `uv run ty check` - static type checking. Keep annotations honest: widen a parameter type
+  (e.g. `ArrayLike`) when the function converts its input, narrow with `assert x is not None`
+  or `isinstance` where a value is optional, and avoid `# type: ignore` and `Any` unless
+  there is no precise type;
+- `uv run pytest`.
+
+GitHub Actions (`.github/workflows/ci.yml`) runs the same four commands on every push to
+`main` and on every pull request; a pull request with a red check is not merged.
 
 ## Numerical code
 

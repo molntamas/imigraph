@@ -25,7 +25,7 @@ from imigraph.report.html import (
 )
 
 PLAYGROUND_LIMITS = {"size": (3, 25), "walkers": (1, 50), "steps": (1, 300)}
-PLAYGROUND_DEFAULTS = {
+PLAYGROUND_DEFAULTS: dict[str, Any] = {
     "size": 7,
     "walkers": 4,
     "steps": 40,
@@ -36,11 +36,15 @@ PLAYGROUND_DEFAULTS = {
 }
 
 
-def run(config: dict[str, Any] | None = None, max_particles: int = 300) -> dict[str, Any]:
+def run(
+    config: dict[str, Any] | None = None, max_particles: int = 300
+) -> dict[str, Any]:
     """Run the experiment for ``config`` (keyword arguments of :class:`ExperimentConfig`)."""
     result = run_experiment(ExperimentConfig(**(config or {})))
     demo = default_demo(seed=result.config.seed + 1)
-    rule_demo_rule = None if result.config.rule is None else rule_from_spec(result.config.rule)
+    rule_demo_rule = (
+        None if result.config.rule is None else rule_from_spec(result.config.rule)
+    )
     rule_demo = default_rule_demo(rule=rule_demo_rule)
     return {
         "passed": result.passed,
@@ -52,7 +56,9 @@ def run(config: dict[str, Any] | None = None, max_particles: int = 300) -> dict[
 
 def run_json(config_json: str = "{}", max_particles: int = 300) -> str:
     """:func:`run` with JSON in and JSON out, the shape the JavaScript side uses."""
-    return json.dumps(run(json.loads(config_json), max_particles), separators=(",", ":"))
+    return json.dumps(
+        run(json.loads(config_json), max_particles), separators=(",", ":")
+    )
 
 
 def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -63,11 +69,15 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
     ``rule`` (a :class:`RuleSpec` as JSON, or ``None`` for RandomHop). An unsupported rule gives
     ``{"error": message}`` instead of raising, so the editor can show it.
     """
-    options = {**PLAYGROUND_DEFAULTS, **(request or {})}
+    options: dict[str, Any] = {**PLAYGROUND_DEFAULTS, **(request or {})}
     for key, (low, high) in PLAYGROUND_LIMITS.items():
         options[key] = int(min(max(int(options[key]), low), high))
     try:
-        spec = RANDOM_HOP if options["rule"] is None else RuleSpec.from_dict(options["rule"])
+        spec = (
+            RANDOM_HOP
+            if options["rule"] is None
+            else RuleSpec.from_dict(options["rule"])
+        )
         rule = rule_from_spec(spec)
     except (ValueError, KeyError, TypeError) as error:
         return {"error": str(error)}
@@ -77,7 +87,9 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
     initial = walkers_at_node(lattice, lattice.center_node, options["walkers"])
     observer = StepObserver()
     rng = np.random.default_rng(int(options["seed"]))
-    history = simulation.run(initial, options["steps"], rng, 1, observer, record_paths=True)
+    history = simulation.run(
+        initial, options["steps"], rng, 1, observer, record_paths=True
+    )
     trajectory = history.project()
     total_time = float(trajectory.times[-1])
     displacement = trajectory.positions[-1] - trajectory.positions[0]

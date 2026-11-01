@@ -131,16 +131,20 @@ class GraphSimulation:
             raise ValueError("initial state must live on the simulation's space")
         if steps < 0 or record_every < 1:
             raise ValueError("steps must be >= 0 and record_every >= 1")
-        with_paths = getattr(self.rule, "apply_with_paths", None)
+        with_paths = (
+            getattr(self.rule, "apply_with_paths", None) if record_paths else None
+        )
         if record_paths and (record_every != 1 or with_paths is None):
-            raise ValueError("paths can only be recorded at every step of a rule that reports them")
+            raise ValueError(
+                "paths can only be recorded at every step of a rule that reports them"
+            )
         frames = [initial.anchors]
         paths = []
         state = initial
         coordinates = self.space.coordinates
         for step in range(1, steps + 1):
             previous = state
-            if record_paths:
+            if with_paths is not None:
                 state, path = with_paths(state, rng)
                 paths.append(path)
             else:
@@ -148,8 +152,15 @@ class GraphSimulation:
             if observer is not None:
                 # A hop along a self-loop (walker stays) is the graph's wall interaction.
                 stayed = state.anchors == previous.anchors
-                observer(step, coordinates[previous.anchors], coordinates[state.anchors], stayed)
+                observer(
+                    step,
+                    coordinates[previous.anchors],
+                    coordinates[state.anchors],
+                    stayed,
+                )
             if step % record_every == 0:
                 frames.append(state.anchors)
         times = self.step_time * record_every * np.arange(len(frames))
-        return GraphHistory(self.space, times, np.stack(frames), np.stack(paths) if paths else None)
+        return GraphHistory(
+            self.space, times, np.stack(frames), np.stack(paths) if paths else None
+        )

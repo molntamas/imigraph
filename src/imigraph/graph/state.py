@@ -29,7 +29,9 @@ class WalkerGraph:
         anchors = np.asarray(self.anchors, dtype=np.int64)
         if anchors.ndim != 1:
             raise ValueError("anchors must be a 1D array of node indices")
-        if anchors.size and (anchors.min() < 0 or anchors.max() >= self.space.num_nodes):
+        if anchors.size and (
+            anchors.min() < 0 or anchors.max() >= self.space.num_nodes
+        ):
             raise ValueError("anchors must be valid node indices of the space")
         object.__setattr__(self, "anchors", anchors)
 

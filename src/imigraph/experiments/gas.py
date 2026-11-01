@@ -91,7 +91,9 @@ class LatticeGasConfig:
 
     @property
     def lattice(self) -> SquareLattice:
-        return SquareLattice(self.size, self.spacing, periodic=self.boundary == "periodic")
+        return SquareLattice(
+            self.size, self.spacing, periodic=self.boundary == "periodic"
+        )
 
     @property
     def system(self) -> LatticeGas:
@@ -121,11 +123,11 @@ class LatticeGasConfig:
 
 
 @dataclass(frozen=True)
-class GasResult:
+class GasResult[Config: GasConfig | LatticeGasConfig]:
     """One system's run with its checks. ``informative`` holds checks that are reported but do
     not count towards the verdict (the Maxwell check of the lattice gas, which has one speed)."""
 
-    config: GasConfig | LatticeGasConfig
+    config: Config
     run: GasRun
     entropy: np.ndarray
     report: ComparisonReport
@@ -146,8 +148,8 @@ class GasComparison:
     """Both gases from the same kind of initial condition, plus the distribution checks of the
     lattice gas against the hard-disk gas."""
 
-    gas: GasResult
-    lattice: GasResult
+    gas: GasResult[GasConfig]
+    lattice: GasResult[LatticeGasConfig]
     report: ComparisonReport
 
     @property
@@ -175,7 +177,9 @@ def energy_check(run: GasRun, rtol: float = 1e-9) -> CheckResult:
 
 def momentum_check(run: GasRun, boundary: str, rtol: float = 1e-9) -> CheckResult:
     momentum = run.momentum()
-    scale = float(np.sqrt(2 * run.mass * run.kinetic_energy()[0] * run.trajectory.num_particles))
+    scale = float(
+        np.sqrt(2 * run.mass * run.kinetic_energy()[0] * run.trajectory.num_particles)
+    )
     if boundary == "periodic":
         drift = float(np.max(np.abs(momentum - momentum[0])) / scale)
         detail = f"largest change of the total momentum, relative to sqrt(2 m E n): {drift:.2e}"
@@ -261,7 +265,7 @@ def collisions_check(run: GasRun) -> CheckResult:
     )
 
 
-def run_gas(config: GasConfig | None = None) -> GasResult:
+def run_gas(config: GasConfig | None = None) -> GasResult[GasConfig]:
     config = GasConfig() if config is None else config
     system = config.system
     rng = np.random.default_rng(config.seed)
@@ -275,11 +279,16 @@ def run_gas(config: GasConfig | None = None) -> GasResult:
         entropy_check(entropy, config.entropy_bins, config.particles),
     )
     return GasResult(
-        config, run, entropy, ComparisonReport("kinetic theory", "hard-disk gas", checks)
+        config,
+        run,
+        entropy,
+        ComparisonReport("kinetic theory", "hard-disk gas", checks),
     )
 
 
-def run_lattice_gas(config: LatticeGasConfig | None = None) -> GasResult:
+def run_lattice_gas(
+    config: LatticeGasConfig | None = None,
+) -> GasResult[LatticeGasConfig]:
     """The lattice gas with the same checks; the Maxwell check is informative only, because every
     walker keeps the speed ``c``: HPP conserves energy but has no thermal speed distribution."""
     config = LatticeGasConfig() if config is None else config

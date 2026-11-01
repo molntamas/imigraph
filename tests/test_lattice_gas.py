@@ -79,7 +79,9 @@ def test_run_conserves_energy_exactly_and_momentum_as_promised(periodic):
     assert energy[0] == pytest.approx(0.5 * 100 * gas.speed**2)
     momentum = run.momentum()
     if periodic:
-        np.testing.assert_array_equal(momentum, np.broadcast_to(momentum[0], momentum.shape))
+        np.testing.assert_array_equal(
+            momentum, np.broadcast_to(momentum[0], momentum.shape)
+        )
     else:
         bound = gas.mass * gas.speed * 100
         assert np.all(np.abs(momentum) <= bound)
@@ -105,7 +107,9 @@ def test_every_step_keeps_the_exclusion_and_moves_along_edges():
 def test_free_expansion_raises_the_entropy_towards_uniform():
     gas = _gas(size=24)
     rng = np.random.default_rng(0)
-    run = gas.simulate(gas.initial_half_box(200, rng), steps=600, rng=rng, record_every=50)
+    run = gas.simulate(
+        gas.initial_half_box(200, rng), steps=600, rng=rng, record_every=50
+    )
     entropy = occupancy_entropy(run.trajectory, bins=6)
     assert entropy[-1] > entropy[0] + 0.3
     assert entropy[-1] > np.log(36) - 0.3

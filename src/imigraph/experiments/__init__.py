@@ -8,4 +8,10 @@ from imigraph.experiments.brownian_vs_graph import (
     run_reference,
 )
 
-__all__ = ["ExperimentConfig", "ExperimentResult", "run_experiment", "run_graph", "run_reference"]
+__all__ = [
+    "ExperimentConfig",
+    "ExperimentResult",
+    "run_experiment",
+    "run_graph",
+    "run_reference",
+]

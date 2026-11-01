@@ -25,8 +25,14 @@ import time
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
+from typing import Any
 
 from playwright.sync_api import Page, sync_playwright
+
+
+class _QuietHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: Any) -> None:
+        pass
 
 
 def serve_gui(web: Path = Path("web")) -> str:
@@ -34,7 +40,9 @@ def serve_gui(web: Path = Path("web")) -> str:
     ``web/`` from a daemon thread on a free port; returns the URL."""
     dist = web / "dist"
     shutil.rmtree(dist, ignore_errors=True)
-    subprocess.run(["uv", "build", "--wheel", "--out-dir", str(dist), "--quiet"], check=True)
+    subprocess.run(
+        ["uv", "build", "--wheel", "--out-dir", str(dist), "--quiet"], check=True
+    )
     assets = Path("src/imigraph/report/assets")
     for name in ("viz.js", "report.css"):
         shutil.copy(assets / name, dist / name)
@@ -43,8 +51,7 @@ def serve_gui(web: Path = Path("web")) -> str:
     with socket.socket() as probe:
         probe.bind(("127.0.0.1", 0))
         port = probe.getsockname()[1]
-    handler = partial(SimpleHTTPRequestHandler, directory=str(web))
-    handler.log_message = lambda *args, **kwargs: None  # type: ignore[assignment]
+    handler = partial(_QuietHandler, directory=str(web))
     server = ThreadingHTTPServer(("127.0.0.1", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     print(f"serving {web}/ (wheel {wheel}) at http://127.0.0.1:{port}/")
@@ -66,7 +73,9 @@ def collect_errors(page: Page) -> list[str]:
     page.on(
         "console",
         lambda message: (
-            errors.append(f"console.error: {message.text}") if message.type == "error" else None
+            errors.append(f"console.error: {message.text}")
+            if message.type == "error"
+            else None
         ),
     )
     return errors
@@ -96,7 +105,9 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
     page.wait_for_timeout(600)
     label = page.text_content("#pair-label") or ""
     assert label.startswith("t = "), f"unexpected pair label {label!r}"
-    page.click("#rule-slider")  # any frame of the rule diagram must have drawn something
+    page.click(
+        "#rule-slider"
+    )  # any frame of the rule diagram must have drawn something
     for canvas in (
         "reference-canvas",
         "rule-canvas",
@@ -107,15 +118,23 @@ def check_report(page: Page, path: Path, out: Path) -> list[str]:
         painted = page.evaluate(NONBLANK_PIXELS_JS, canvas)
         assert painted > 500, f"{canvas} looks blank ({painted} painted pixels)"
         print(f"  {canvas}: {painted} painted pixels")
-    for frame in (1, 2, 3):  # match, choose, rewrite phases of the first rule application
+    for frame in (
+        1,
+        2,
+        3,
+    ):  # match, choose, rewrite phases of the first rule application
         page.evaluate(
             "(f) => { const s = document.getElementById('rule-slider'); s.value = f;"
             " s.dispatchEvent(new Event('input')); }",
             frame,
         )
         page.wait_for_timeout(100)
-        page.locator("#rule-canvas").screenshot(path=str(out / f"rule-phase-{frame}.png"))
-    assert page.locator("table tbody tr").count() >= 3, "check table has fewer than 3 rows"
+        page.locator("#rule-canvas").screenshot(
+            path=str(out / f"rule-phase-{frame}.png")
+        )
+    assert page.locator("table tbody tr").count() >= 3, (
+        "check table has fewer than 3 rows"
+    )
     assert page.locator("svg").count() >= 4, "fewer than 4 SVG plots"
     page.screenshot(path=str(out / "report.png"), full_page=True)
     check_phone_layout(page, out / "report-phone.png")
@@ -148,7 +167,9 @@ def check_gas_report(page: Page, path: Path, out: Path) -> list[str]:
     painted = page.evaluate(NONBLANK_PIXELS_JS, "gas-canvas")
     assert painted > 500, f"gas-canvas looks blank ({painted} painted pixels)"
     print(f"  gas-canvas: {frames} frames, {painted} painted pixels")
-    assert page.locator("table tbody tr").count() >= 4, "check table has fewer than 4 rows"
+    assert page.locator("table tbody tr").count() >= 4, (
+        "check table has fewer than 4 rows"
+    )
     assert page.locator("svg").count() >= 5, "fewer than 5 SVG plots"
     page.screenshot(path=str(out / "gas.png"), full_page=True)
     check_phone_layout(page, out / "gas-phone.png")
@@ -159,16 +180,20 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     print(f"gui: {url}")
     errors = collect_errors(page)
     goto_with_retries(page, url)
-    page.wait_for_function("document.getElementById('run').disabled === false", timeout=timeout_ms)
+    page.wait_for_function(
+        "document.getElementById('run').disabled === false", timeout=timeout_ms
+    )
     print(f"  python loaded: {page.text_content('#status')}")
     # Playground: runs on load, then with a biased preset chosen from the editor.
     page.wait_for_function(
-        "/^done/.test(document.getElementById('pg-status').textContent)", timeout=timeout_ms
+        "/^done/.test(document.getElementById('pg-status').textContent)",
+        timeout=timeout_ms,
     )
     assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
     page.select_option("#pg-preset", "BiasedHop")
     page.wait_for_function(
-        "/BiasedHop/.test(document.getElementById('pg-physics').textContent)", timeout=timeout_ms
+        "/BiasedHop/.test(document.getElementById('pg-physics').textContent)",
+        timeout=timeout_ms,
     )
     physics = page.text_content("#pg-physics") or ""
     assert "drift v = (0." in physics, physics
@@ -198,7 +223,8 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     page.fill("input[name=record_every]", "50")
     page.click("#run")
     page.wait_for_function(
-        "/^(done|error)/.test(document.getElementById('status').textContent)", timeout=timeout_ms
+        "/^(done|error)/.test(document.getElementById('status').textContent)",
+        timeout=timeout_ms,
     )
     status = page.text_content("#status") or ""
     print(f"  run: {status}")
@@ -225,7 +251,9 @@ def main() -> int:
     )
     parser.add_argument("--gui", default="http://web:8000/")
     parser.add_argument("--out", type=Path, default=Path("output/screenshots"))
-    parser.add_argument("--timeout", type=int, default=300_000, help="GUI timeout in ms")
+    parser.add_argument(
+        "--timeout", type=int, default=300_000, help="GUI timeout in ms"
+    )
     parser.add_argument("--skip-gui", action="store_true")
     parser.add_argument(
         "--serve",
@@ -238,7 +266,9 @@ def main() -> int:
         args.gui = serve_gui()
     if args.report is None:
         candidates = sorted(Path("output").glob("brownian_vs_graph_*.html"))
-        args.report = candidates[-1] if candidates else Path("output/brownian_vs_graph_none.html")
+        args.report = (
+            candidates[-1] if candidates else Path("output/brownian_vs_graph_none.html")
+        )
 
     failures: list[str] = []
     with sync_playwright() as playwright:

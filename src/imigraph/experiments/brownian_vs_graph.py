@@ -47,7 +47,9 @@ class ExperimentConfig:
         if self.entropy_bins < 1:
             raise ValueError("entropy_bins must be >= 1")
         if self.rule is not None:
-            RuleSpec.from_dict(self.rule)  # validate early, with the editor's error message
+            RuleSpec.from_dict(
+                self.rule
+            )  # validate early, with the editor's error message
 
     @property
     def diffusion(self) -> float:
@@ -60,11 +62,15 @@ class ExperimentConfig:
 
     @property
     def reference_system(self) -> BrownianBox:
-        return BrownianBox(diffusion=self.diffusion, dt=self.step_time, box=self.lattice.box)
+        return BrownianBox(
+            diffusion=self.diffusion, dt=self.step_time, box=self.lattice.box
+        )
 
     @property
     def graph_system(self) -> GraphSimulation:
-        return GraphSimulation(self.lattice, rule_from_spec(self.rule), step_time=self.step_time)
+        return GraphSimulation(
+            self.lattice, rule_from_spec(self.rule), step_time=self.step_time
+        )
 
     @property
     def rule_name(self) -> str:
@@ -75,7 +81,11 @@ class ExperimentConfig:
         return self.steps * self.step_time
 
     def to_dict(self) -> dict[str, Any]:
-        return {**asdict(self), "diffusion": self.diffusion, "total_time": self.total_time}
+        return {
+            **asdict(self),
+            "diffusion": self.diffusion,
+            "total_time": self.total_time,
+        }
 
 
 @dataclass(frozen=True)
@@ -94,7 +104,9 @@ class ExperimentResult:
 
 
 def run_reference(
-    config: ExperimentConfig, rng: np.random.Generator, observer: StepObserver | None = None
+    config: ExperimentConfig,
+    rng: np.random.Generator,
+    observer: StepObserver | None = None,
 ) -> Trajectory:
     system = config.reference_system
     initial = system.all_at(config.lattice.box.center, config.particles)
@@ -102,14 +114,20 @@ def run_reference(
 
 
 def run_graph(
-    config: ExperimentConfig, rng: np.random.Generator, observer: StepObserver | None = None
+    config: ExperimentConfig,
+    rng: np.random.Generator,
+    observer: StepObserver | None = None,
 ) -> GraphHistory:
     lattice = config.lattice
     initial = walkers_at_node(lattice, lattice.center_node, config.particles)
-    return config.graph_system.run(initial, config.steps, rng, config.record_every, observer)
+    return config.graph_system.run(
+        initial, config.steps, rng, config.record_every, observer
+    )
 
 
-def metrics_of(config: ExperimentConfig, trajectory: Trajectory, observer: StepObserver) -> Metrics:
+def metrics_of(
+    config: ExperimentConfig, trajectory: Trajectory, observer: StepObserver
+) -> Metrics:
     return compute_metrics(
         trajectory,
         observer,

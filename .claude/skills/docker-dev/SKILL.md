@@ -14,6 +14,7 @@ docker compose build dev                                       # once, or after 
 docker compose run --rm -T dev uv run pytest                   # tests
 docker compose run --rm -T dev uv run ruff check .             # lint
 docker compose run --rm -T dev uv run ruff format .            # format
+docker compose run --rm -T dev uv run ty check                 # type check
 docker compose run --rm -T dev pre-commit run --all-files      # what the commit hook runs
 docker compose run --rm -T dev uv run python -m imigraph report   # new output/brownian_vs_graph_<time>.html + index.html
 docker compose run --rm -T dev uv run python -m imigraph compare  # print the comparison report

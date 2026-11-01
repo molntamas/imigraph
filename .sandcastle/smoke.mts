@@ -56,7 +56,7 @@ if (GH_TOKEN) {
     "claude --version && gh --version | head -1 && uv --version && pre-commit --version && node --version",
     `uv run python -c "import sys, numpy, scipy, networkx; print('python', sys.version.split()[0], '| numpy', numpy.__version__, '| scipy', scipy.__version__, '| networkx', networkx.__version__)"`,
     "uv run pytest",
-    "uv run ruff check . && uv run ruff format --check .",
+    "uv run ruff check . && uv run ruff format --check . && uv run ty check",
     // A commit inside the sandbox runs the pre-commit hooks through docker/git-hooks
     // (core.hooksPath from the container environment, see config.mts); then undone.
     "echo smoke > smoke.txt && git add smoke.txt && git commit -q -m 'smoke: hooks run in the sandbox' " +
