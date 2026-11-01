@@ -54,7 +54,12 @@ shared consumer.
   saved page), the resolved `universe`, measured vs predicted drift/diffusion (plus blocked
   hops and collision counts for hyperedge walkers), or `{"error": message}` for an
   unsupported rule or universe. `viz.js` draws hyperedge walkers with `drawArrows` and the
-  collision sites with `drawCollisionMarks`. `web/app.js` keeps the rule list
+  collision sites with `drawCollisionMarks`. Hyperedge runs also return `captions` (one per
+  frame from `world.explain_frames`: what Collide, Reflect and Stream did, the total momentum)
+  shown under the step-by-step animation, and `headings` per walker may be given explicitly
+  for clicked sites. `live.collision_demo()` is the fixed 4x4 world of section 1c (two
+  walkers head-on, `COLLISION_DEMO`) with the explanation `assets/collision-demo.html`;
+  "Load this world into the playground" copies it into the form (`customHeadings`). `web/app.js` keeps the rule list
   (`library`, persisted in `localStorage`), the graphical editor (`pattern`, `renderPattern`,
   `clickNode`; same layout as `svg.pattern_layout`), the text editor (`editorChanged`), the
   universe canvas (`drawUniverse`), export / import (rule, rule set, session) and *Save result

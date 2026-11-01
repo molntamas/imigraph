@@ -349,7 +349,30 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     page.wait_for_timeout(300)
     painted(page, "pg-demo-canvas")
     page.screenshot(path=str(out / "gui-lattice-gas.png"), full_page=False)
+    assert "total momentum" in (page.text_content("#pg-demo-caption") or "")
     print("  hyperedge walkers with hpp collisions ok")
+
+    # The collision demo (1c): the fixed world ran, step 2 is the collision, loading it into
+    # the playground reproduces it there.
+    page.wait_for_function(
+        "/^step /.test(document.getElementById('cd-caption').textContent)",
+        timeout=timeout_ms,
+    )
+    page.fill("#cd-slider", "2")
+    page.dispatch_event("#cd-slider", "input")
+    caption = page.text_content("#cd-caption") or ""
+    assert "Collide at (1,1)" in caption, caption
+    assert "head-on" in (page.text_content("#cd-docs") or "")
+    painted(page, "cd-canvas")
+    page.screenshot(path=str(out / "gui-collision-demo.png"), full_page=False)
+    page.click("#cd-load")
+    wait_playground_done(page, timeout_ms)
+    assert page.input_value("select[name=collisions]") == "hpp"
+    assert page.input_value("input[name=size]") == "4"
+    label = page.text_content("#pg-universe-label") or ""
+    assert label.startswith("2 hyperedge walkers on a 4"), label
+    assert "collisions in the run" in (page.text_content("#pg-measured") or "")
+    print("  collision demo ok")
     # Back to the Brownian setting for the rest of the check.
     page.click("#pg-library tr[data-name=Stream] input.enabled")
     page.click("#pg-library tr[data-name=Reflect] input.enabled")

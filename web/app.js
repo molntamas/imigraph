@@ -48,6 +48,9 @@
   let pattern = null;        // graphical editor state of the selected rule: {variables, lhs, rhs}
   let picked = null;         // {side: "lhs"|"rhs", name} of the node picked in the editor
   let customSites = null;    // walker sites chosen by clicking the universe canvas
+  let customHeadings = null; // one heading per custom site (from the collision demo), or null
+  let demoPlayers = [];
+  let collisionDemoJson = null;
   let lastResult = null;
   let applyTimer = null;
 
@@ -94,7 +97,7 @@
       const values = {};
       for (const [key, value] of form.entries()) values[key] = value;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        library: library, selectedId: selectedId, form: values, customSites: customSites,
+        library: library, selectedId: selectedId, form: values, customSites: customSites, customHeadings: customHeadings,
       }));
     } catch (error) { /* private window or storage blocked: the page still works */ }
   }
@@ -110,6 +113,7 @@
         if (form.elements[key]) form.elements[key].value = saved.form[key];
       });
       customSites = Array.isArray(saved.customSites) ? saved.customSites.map(Number) : null;
+      customHeadings = Array.isArray(saved.customHeadings) ? saved.customHeadings.map(String) : null;
       return true;
     } catch (error) { return false; }
   }
@@ -477,6 +481,7 @@
       if (customSites === null || byId("playground").elements.placement.value !== "sites") customSites = shownSites().slice();
       const at = customSites.indexOf(site);
       if (at >= 0) customSites.splice(at, 1); else customSites.push(site);
+      customHeadings = null;  // headings of clicked sites follow the "initial heading" choice
       byId("playground").elements.placement.value = "sites";
       syncPlacement();
       drawUniverse();
@@ -500,7 +505,10 @@
     for (const [key, value] of form.entries()) {
       request[key] = STRING_FIELDS.indexOf(key) >= 0 ? value : parseInt(value, 10);
     }
-    if (request.placement === "sites") request.sites = customSites || [];
+    if (request.placement === "sites") {
+      request.sites = customSites || [];
+      if (customHeadings && customHeadings.length === request.sites.length) request.headings = customHeadings;
+    }
     return request;
   }
 
@@ -540,13 +548,16 @@
       if (demo.collisions && f > 0) V.drawCollisionMarks(world, demo.space.coordinates, demo.collisions[f - 1], demo.space.spacing);
       if (demo.directions) V.drawArrows(world, demo.space.coordinates, demo.anchors[f], demo.directions[f], demo.space.spacing);
       else V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+      byId("pg-demo-caption").textContent = result.captions && result.captions.length ? result.captions[f] : "";
     }, { slider: byId("pg-demo-slider"), button: byId("pg-demo-play"), label: byId("pg-demo-label"),
          labelFor: function (f) { return "step " + f; }, interval: 500 }));
 
     const m = result.measured, p = result.predicted;
     const modelRows = result.model.walker_model === "hyperedge"
       ? "<tr><th>blocked hops (fraction of walkers per step, exclusion)</th><td>" + fmt(m.blocked_rate) + "</td></tr>" +
-        "<tr><th>collisions in the run (collisions: " + escapeHtml(result.model.collisions) + ")</th><td>" + m.collisions + "</td></tr>"
+        "<tr><th>collisions in the run (collisions: " + escapeHtml(result.model.collisions) + ")</th><td>" + m.collisions + "</td></tr>" +
+        "<tr><th>total momentum at the start / end (m a/&tau;), steps where it changed (wall reflections)</th><td>(" +
+        m.momentum_start.map(fmt).join(", ") + ") / (" + m.momentum_end.map(fmt).join(", ") + "), " + m.momentum_changes + "</td></tr>"
       : "";
     byId("pg-measured").innerHTML =
       '<table class="kv"><tbody>' +
@@ -664,6 +675,46 @@
     }, 20);
   }
 
+  // ---------- collision demo (section 1c) ----------
+
+  function renderCollisionDemo(demo) {
+    demoPlayers.forEach(function (p) { p.pause(); });
+    demoPlayers = [];
+    const result = demo.result;
+    byId("cd-docs").innerHTML = demo.docs;
+    if (result.error) { byId("cd-caption").textContent = "error: " + result.error; return; }
+    const d = result.demo;
+    const world = V.Viewport(byId("cd-canvas"), d.space.box, 30);
+    demoPlayers.push(V.Player(d.times.length, function (f) {
+      world.clear();
+      V.drawSpace(world, d.space.coordinates, d.space.edges, 5, 1.5 * d.space.spacing);
+      if (f > 0) V.drawCollisionMarks(world, d.space.coordinates, d.collisions[f - 1], d.space.spacing);
+      V.drawArrows(world, d.space.coordinates, d.anchors[f], d.directions[f], d.space.spacing);
+      byId("cd-caption").textContent = result.captions[f];
+    }, { slider: byId("cd-slider"), button: byId("cd-play"), label: byId("cd-label"),
+         labelFor: function (f) { return "step " + f; }, interval: 1500 }));
+    byId("cd-load").onclick = function () {
+      const request = demo.request;
+      library.forEach(function (r) { r.enabled = false; });
+      request.rule.forEach(function (spec) {
+        const existing = library.find(function (r) { return r.builtin && r.builtin === spec.builtin; });
+        if (existing) { existing.enabled = true; } else { library.push(freshRule(Object.assign({ enabled: true }, spec))); }
+      });
+      const form = byId("playground");
+      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions"].forEach(function (key) {
+        if (request[key] !== undefined && form.elements[key]) form.elements[key].value = request[key];
+      });
+      customSites = request.sites.slice();
+      customHeadings = request.headings.slice();
+      syncPlacement();
+      selectRule(library.find(function (r) { return r.enabled; }).id);
+      drawUniverse();
+      applyPlayground();
+      byId("cd-status").textContent = "loaded: the playground now runs this world (1b); change a heading or a site there";
+      byId("pg-demo-canvas").scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+  }
+
   // Accepts a single rule, a list of rules, or a session (rule list + universe, with the whole
   // library when it was exported from here).
   function importJson(text) {
@@ -688,6 +739,7 @@
         if (data[key] !== undefined && data[key] !== null && form.elements[key]) form.elements[key].value = data[key];
       });
       customSites = Array.isArray(data.sites) ? data.sites.map(Number) : null;
+      customHeadings = Array.isArray(data.headings) ? data.headings.map(String) : null;
       syncPlacement();
       selectRule(library[0].id);
     } else {
@@ -826,12 +878,17 @@
     runJson = live.run_json;
     playgroundJson = live.playground_json;
     playgroundPageJson = live.playground_page_json;
+    collisionDemoJson = live.collision_demo_json;
     status("ready (" + wheel + ")");
     byId("load-status").textContent = "Python is ready.";
     byId("run").textContent = "Run";
     byId("run").disabled = false;
     byId("pg-apply").disabled = false;
     applyPlayground();
+    setTimeout(function () {
+      try { renderCollisionDemo(JSON.parse(collisionDemoJson())); }
+      catch (error) { byId("cd-caption").textContent = "could not run the collision demo: " + error; console.error(error); }
+    }, 60);
   }
 
   // ---------- wiring ----------
@@ -860,6 +917,7 @@
   byId("pg-reset").addEventListener("click", function () {
     resetLibrary();
     customSites = null;
+    customHeadings = null;
     selectRule(selectedId);
     syncPlacement();
     drawUniverse();

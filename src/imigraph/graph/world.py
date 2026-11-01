@@ -37,7 +37,7 @@ from typing import Any
 
 import numpy as np
 
-from imigraph.graph.gas import OPPOSITE, RULES, LatticeGas, LatticeGasState
+from imigraph.graph.gas import DIRECTIONS, OPPOSITE, RULES, LatticeGas, LatticeGasState
 from imigraph.graph.rules import DIRECTION_NAMES, ChainRule, RuleSpec, rule_specs
 from imigraph.graph.simulation import GraphHistory
 from imigraph.graph.space import SquareLattice
@@ -382,14 +382,23 @@ class WalkerSystem:
     # ---------- states ----------
 
     def initial_state(
-        self, anchors: np.ndarray, heading: str, rng: np.random.Generator
+        self,
+        anchors: np.ndarray,
+        heading: str,
+        rng: np.random.Generator,
+        directions: np.ndarray | None = None,
     ) -> WalkerGraph | LatticeGasState:
+        """The state at step 0; ``directions`` gives every hyperedge walker's heading label
+        explicitly (one per anchor), otherwise ``heading`` chooses them."""
         anchors = np.asarray(anchors, dtype=np.int64)
         if self.walker_model == "edge":
             return WalkerGraph(self.space, anchors)
-        return LatticeGasState(
-            self.space, anchors, initial_headings(anchors, heading, rng)
-        )
+        if directions is None:
+            directions = initial_headings(anchors, heading, rng)
+        directions = np.asarray(directions, dtype=np.int64)
+        if directions.shape != anchors.shape:
+            raise ValueError("give one heading per walker")
+        return LatticeGasState(self.space, anchors, directions)
 
     def step(
         self, state: WalkerGraph | LatticeGasState, rng: np.random.Generator
@@ -474,6 +483,120 @@ class WalkerSystem:
             tuple(collisions) if self.walker_model == "hyperedge" else None,
         )
         return history, blocked_total
+
+
+def momentum(history: GraphHistory) -> np.ndarray | None:
+    """Total momentum of hyperedge walkers at every frame in units of ``m a / tau``: the sum
+    of the heading unit vectors, shape ``(T, 2)``. ``None`` for edge walkers."""
+    if history.directions is None:
+        return None
+    return DIRECTIONS[history.directions].sum(axis=1)
+
+
+def heading_labels(directions: np.ndarray) -> np.ndarray:
+    return np.asarray(DIRECTION_NAMES)[directions]
+
+
+def explain_frames(history: GraphHistory, detail: int = 8) -> list[str]:
+    """One caption per frame of a hyperedge run: what Collide, Reflect and Stream did in the
+    step that led to the frame, and the total momentum. Walkers are named by index and
+    listed one by one up to ``detail`` walkers, counted beyond that."""
+    if history.directions is None or history.collisions is None:
+        return []
+    space = history.space
+    coords = space.coordinates
+    cell = space.cell_size
+    lower = space.box.lower
+
+    def at(site: int) -> str:
+        i, j = np.rint((coords[site] - lower - cell / 2) / cell).astype(int)
+        return f"({i},{j})"
+
+    total = momentum(history)
+    assert total is not None
+    n = history.num_walkers
+    few = n <= detail
+    captions = []
+    labels = heading_labels(history.directions)
+    for frame in range(history.num_frames):
+        parts: list[str] = []
+        if frame == 0:
+            if few:
+                parts.append(
+                    "; ".join(
+                        f"walker {w} at {at(int(history.anchors[0, w]))} heading "
+                        f"{labels[0, w]}"
+                        for w in range(n)
+                    )
+                )
+            else:
+                parts.append(f"{n} walkers placed with their headings")
+        else:
+            before, after = frame - 1, frame
+            sites_b, sites_a = history.anchors[before], history.anchors[after]
+            dirs_b, dirs_a = history.directions[before], history.directions[after]
+            collided_sites = history.collisions[before]
+            collided = np.isin(sites_b, collided_sites) & (dirs_b != dirs_a)
+            for site in collided_sites:
+                pair = np.flatnonzero((sites_b == site) & collided)
+                if few:
+                    parts.append(
+                        f"Collide at {at(int(site))}: walkers "
+                        + " and ".join(str(w) for w in pair)
+                        + " met head-on ("
+                        + ", ".join(labels[before, w] for w in pair)
+                        + ") and left along the perpendicular pair ("
+                        + ", ".join(labels[after, w] for w in pair)
+                        + "); momentum of the pair 0 before and after"
+                    )
+            if not few and collided_sites.size:
+                parts.append(f"Collide at {collided_sites.size} site(s)")
+            turned = (dirs_a == OPPOSITE[dirs_b]) & ~collided
+            wall = space.neighbors[sites_b, dirs_b] == sites_b
+            reflected = np.flatnonzero(turned & wall)
+            if reflected.size:
+                parts.append(
+                    "Reflect: "
+                    + (
+                        ", ".join(
+                            f"walker {w} turned round at the wall ({labels[before, w]} to "
+                            f"{labels[after, w]})"
+                            for w in reflected
+                        )
+                        if few
+                        else f"{reflected.size} walker(s) turned round at a wall"
+                    )
+                    + "; the wall takes the momentum"
+                )
+            moved = np.flatnonzero(sites_a != sites_b)
+            stayed = np.flatnonzero(sites_a == sites_b)
+            if moved.size:
+                parts.append(
+                    "Stream: "
+                    + (
+                        ", ".join(
+                            f"walker {w} {at(int(sites_b[w]))} to {at(int(sites_a[w]))}"
+                            for w in moved
+                        )
+                        if few
+                        else f"{moved.size} walker(s) moved one edge"
+                    )
+                )
+            if stayed.size:
+                parts.append(
+                    (
+                        ", ".join(f"walker {w}" for w in stayed)
+                        if few
+                        else f"{stayed.size} walker(s)"
+                    )
+                    + " stayed (heading into a wall without Reflect, or blocked)"
+                )
+        px, py = total[frame]
+        parts.append(
+            f"total momentum ({px:g}, {py:g}) m a/tau; every walker keeps speed a/tau"
+        )
+        captions.append(f"step {frame}: " + ". ".join(parts))
+    return captions
 
 
 def _append_path(pieces: list[np.ndarray], path: np.ndarray) -> None:

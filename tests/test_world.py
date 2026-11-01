@@ -244,3 +244,73 @@ def test_playground_runs_every_model_and_documents_collisions():
     )
     assert mixed["error"] is None and mixed["predicted"]["hops"] == 1
     assert mixed["measured"]["blocked_rate"] >= 0
+
+
+def test_momentum_and_energy_are_conserved_by_hpp_collisions():
+    from imigraph.graph.world import momentum
+
+    lattice = SquareLattice(8, periodic=True)
+    system = WalkerSystem(lattice, (BuiltinRule("stream"),), "hyperedge", "hpp")
+    rng = np.random.default_rng(11)
+    anchors = rng.choice(lattice.num_nodes, size=30, replace=False)
+    history, blocked = system.run(system.initial_state(anchors, "random", rng), 80, rng)
+    assert blocked == 0 and history.collisions is not None
+    assert sum(len(c) for c in history.collisions) > 0
+    total = momentum(history)
+    assert total is not None
+    np.testing.assert_array_equal(total, np.repeat(total[:1], 81, axis=0))
+    # Energy: every walker keeps its speed, so the kinetic energy is n m c^2 / 2 at all times.
+    speeds = np.linalg.norm(
+        np.diff(lattice.coordinates[history.anchors], axis=0), axis=2
+    )
+    wrapped = speeds > 1.5  # periodic wrap-around jumps
+    assert np.all(np.isclose(speeds[~wrapped], 1.0))
+
+
+def test_the_collision_demo_collides_in_step_two_and_explains_it():
+    from imigraph.report.live import COLLISION_DEMO, collision_demo
+
+    demo = collision_demo()
+    result = demo["result"]
+    assert result["error"] is None, result["error"]
+    assert demo["request"]["sites"] == [1, 9] and "head-on" in demo["docs"]
+    assert result["universe"]["headings"] == ["+x", "-x"]
+    assert result["demo"]["anchors"][1] == [5, 5]  # step 1: both at (1,1)
+    assert result["demo"]["collisions"][1] == [5]  # step 2: Collide at (1,1)
+    assert sorted(result["demo"]["anchors"][2]) == [4, 6]
+    captions = result["captions"]
+    assert len(captions) == COLLISION_DEMO["steps"] + 1
+    assert captions[0].startswith("step 0: walker 0 at (0,1) heading +x")
+    assert "Collide at (1,1)" in captions[2] and "perpendicular" in captions[2]
+    assert "Reflect" in captions[3] and "Stream" in captions[1]
+    assert all("total momentum" in c for c in captions)
+    assert result["measured"]["momentum_start"] == [0.0, 0.0]
+    assert result["demo"]["momentum"][2] == [0.0, 0.0]
+    # Momentum changes only at wall reflections (steps 3 and 4 here), never at collisions.
+    changes = [
+        f
+        for f in range(1, 7)
+        if result["demo"]["momentum"][f] != result["demo"]["momentum"][f - 1]
+    ]
+    assert changes == [3, 4, 6], changes
+    for f in range(1, 7):
+        assert ("Reflect" in captions[f]) == (f in changes), captions[f]
+        assert ("Collide" in captions[f]) == (f in (2, 5)), captions[f]
+    assert result["measured"]["momentum_changes"] == 3
+
+
+def test_explicit_headings_are_validated():
+    base = {
+        "walker_model": "hyperedge",
+        "placement": "sites",
+        "sites": [1, 9],
+        "steps": 3,
+    }
+    assert "one heading per walker" in playground({**base, "headings": ["+x"]})["error"]
+    assert "+x, -x, +y or -y" in playground({**base, "headings": ["+x", "up"]})["error"]
+    assert (
+        "exclusion"
+        in playground({**base, "sites": [1, 1], "headings": ["+x", "+x"]})["error"]
+    )
+    ok = playground({**base, "headings": ["+y", "-y"]})
+    assert ok["error"] is None and ok["universe"]["headings"] == ["+y", "-y"]

@@ -14,8 +14,13 @@ import numpy as np
 
 from imigraph.experiments import ExperimentConfig, run_experiment
 from imigraph.graph import SquareLattice, WalkerGraph, walkers_at_node
-from imigraph.graph.rules import rule_from_spec
-from imigraph.graph.world import WalkerSystem, rules_from_data
+from imigraph.graph.rules import DIRECTION_NAMES, rule_from_spec
+from imigraph.graph.world import (
+    WalkerSystem,
+    explain_frames,
+    momentum,
+    rules_from_data,
+)
 from imigraph.metrics import StepObserver, occupied_cells
 from imigraph.report.html import (
     _asset,
@@ -43,6 +48,36 @@ PLAYGROUND_DEFAULTS: dict[str, Any] = {
     "walker_model": "edge",
     "collisions": "none",
     "heading": "random",
+    "headings": None,
+}
+
+# A world made to show a collision: two hyperedge walkers on a 4x4 world head straight at each
+# other, two sites apart, with the HPP rules. Step 1 streams them onto the same site, step 2
+# Collide turns them onto the perpendicular pair and Stream moves them apart; the walls then
+# reflect them back and a second collision follows.
+COLLISION_DEMO: dict[str, Any] = {
+    "rule": [
+        {
+            "name": "Reflect",
+            "builtin": "reflect",
+            "description": "a walker heading into a wall turns round",
+        },
+        {
+            "name": "Stream",
+            "builtin": "stream",
+            "description": "every walker moves one edge along its heading",
+        },
+    ],
+    "walker_model": "hyperedge",
+    "collisions": "hpp",
+    "size": 4,
+    "walls": "reflecting",
+    "placement": "sites",
+    "sites": [1, 9],
+    "headings": ["+x", "-x"],
+    "walkers": 2,
+    "steps": 6,
+    "seed": 1,
 }
 
 
@@ -141,7 +176,23 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
         anchors = initial_universe(
             lattice, str(options["placement"]), options["walkers"], sites, rng
         ).anchors
-        initial = system.initial_state(anchors, str(options["heading"]), rng)
+        directions = None
+        headings = options.get("headings")
+        if headings and system.walker_model == "hyperedge":
+            if len(headings) != anchors.shape[0]:
+                raise ValueError(
+                    f"{len(headings)} headings for {anchors.shape[0]} walkers: give one "
+                    "heading per walker, or none"
+                )
+            unknown = [h for h in headings if h not in DIRECTION_NAMES]
+            if unknown:
+                raise ValueError(
+                    f"headings must be +x, -x, +y or -y, not {unknown[0]!r}"
+                )
+            directions = np.array([DIRECTION_NAMES.index(h) for h in headings])
+        initial = system.initial_state(
+            anchors, str(options["heading"]), rng, directions
+        )
     except (ValueError, KeyError, TypeError) as error:
         return {"error": str(error)}
     observer = StepObserver()
@@ -152,7 +203,11 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
     occupied = occupied_cells(trajectory, lattice.size)
     descriptions = system.descriptions(spacing, step_time)
     hyper = system.walker_model == "hyperedge"
+    total = momentum(history)
+    demo = _demo_blob(history)
+    demo["momentum"] = None if total is None else np.round(total, 6).tolist()
     return {
+        "captions": explain_frames(history),
         "error": None,
         "rule": descriptions[-1],
         "rules": descriptions,
@@ -175,12 +230,13 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "walker_model": system.walker_model,
             "collisions": system.collisions,
             "heading": str(options["heading"]) if hyper else None,
+            "headings": heading_names(history) if hyper else None,
             "steps": options["steps"],
             "seed": int(options["seed"]),
             "spacing": spacing,
             "step_time": step_time,
         },
-        "demo": _demo_blob(history),
+        "demo": demo,
         "measured": {
             "mean_squared_step": float(np.mean(observer.mean_squared)),
             "diffusion": float(trajectory.msd()[-1] / (4 * total_time)),
@@ -193,6 +249,11 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "blocked_rate": blocked / (options["steps"] * max(1, int(anchors.shape[0])))
             if hyper
             else None,
+            "momentum_start": None if total is None else total[0].tolist(),
+            "momentum_end": None if total is None else total[-1].tolist(),
+            "momentum_changes": None
+            if total is None
+            else int(np.sum(np.any(np.diff(total, axis=0) != 0, axis=1))),
         },
         "predicted": {
             "diffusion": system.diffusion(spacing, step_time).tolist(),
@@ -200,6 +261,26 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "hops": system.hops,
         },
     }
+
+
+def heading_names(history: Any) -> list[str] | None:
+    if history.directions is None:
+        return None
+    return [DIRECTION_NAMES[int(d)] for d in history.directions[0]]
+
+
+def collision_demo() -> dict[str, Any]:
+    """The predefined collision world (:data:`COLLISION_DEMO`): its request, the playground
+    result with the step captions, and the explanation page fragment."""
+    return {
+        "request": dict(COLLISION_DEMO),
+        "result": playground(COLLISION_DEMO),
+        "docs": _asset("collision-demo.html"),
+    }
+
+
+def collision_demo_json() -> str:
+    return json.dumps(collision_demo(), separators=(",", ":"))
 
 
 def playground_json(request_json: str = "{}") -> str:
