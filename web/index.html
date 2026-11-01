@@ -27,13 +27,11 @@
   #pg-library tbody tr { cursor: pointer; }
   #pg-library tbody tr.selected { background: #eff6ff; }
   #pg-library tbody tr.invalid td.notation { color: var(--fail); }
-  #pg-library td.notation { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+  #pg-library td.notation { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; max-width: 360px; overflow-wrap: anywhere; }
   #pg-library td.description { font-size: 12px; color: var(--muted); max-width: 220px; }
-  #pg-library tbody tr.builtin td.notation::after { content: " (built-in)"; color: var(--muted); font-family: inherit; }
-  .pattern-editor.readonly svg { opacity: 0.8; background: var(--bg); }
-  .pattern-editor.readonly circle.node, .pattern-editor.readonly line.edge, .pattern-editor.readonly circle.loop { cursor: default; }
   #pg-docs table.kv th { width: auto; }
   #pg-docs table.kv { margin-bottom: 12px; }
+  #bg-rules table.kv th { width: auto; }
   span.description { font-weight: normal; font-size: 12px; }
   #pg-library input[type="checkbox"] { width: 16px; height: 16px; }
   /* graphical pattern editor */
@@ -43,8 +41,9 @@
   .pattern-editor .side-label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 2px; }
   .pattern-editor circle.node { cursor: pointer; }
   .pattern-editor circle.picked { stroke: #f59e0b; stroke-width: 3; }
-  .pattern-editor line.edge, .pattern-editor circle.loop { cursor: pointer; }
+  .pattern-editor polyline.edge, .pattern-editor circle.loop { cursor: pointer; }
   .pattern-editor text { pointer-events: none; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .pattern-editor text.annotation { fill: #374151; font-size: 11px; }
   #pg-universe-canvas { cursor: crosshair; }
   td svg.pattern { width: 326px; height: auto; }
 </style>
@@ -56,15 +55,21 @@
 WebAssembly). The first load downloads Pyodide, numpy and scipy (about 15 MB) and may take half a minute.
 <span id="load-status"></span></p>
 
-<h2>Small things moving on a lattice graph: the playground (random walkers, lattice gas)</h2>
+<h2>Small things moving on a lattice graph: the playground (random walkers, lattice gas, balls)</h2>
 <div class="card">
-<p>A <em>rule</em> is an edge rewrite: a walker edge <code>{w,s}</code> plus a chain of site edges on the left, the walker
-re-attached to a site of the chain on the right. Edit a rule in the drawing or in the text, both show the same rule.
-The rule set runs its ticked rules in order in every step. Choose the <em>walker model</em>, the <em>collisions</em> and
-the strategy for <em>overlapping matches</em> (see the explanation below the results), the <em>starting universe</em> (world size, walls, where the walkers begin,
-by clicking sites if you like), then <em>Apply</em>: the run is recomputed in Python at once, and the measured
-diffusion, drift and wall rate are compared with what the rules predict. <em>Save result page</em> writes everything
-into one self-contained HTML file.</p>
+<p>There is one kind of walker, the <em>ball</em> <code>{w,s,v}</code>: a walker node on site <code>s</code> with velocity
+<code>v</code>, a node of the velocity lattice (a ball at rest sits on the origin <code>o</code> and is a random walker; a
+ball with a unit velocity is the walker of the lattice gas). A <em>rule</em> is a rewrite of ball hyperedges: the pattern
+on the left, what replaces it on the right, with annotations that say which edges of the room and of the velocity lattice
+are meant (<code>{s,t}_k</code> the room edge of label k, <code>{v,v'}|k</code> the mirror image across the axis of k,
+<code>{v,v'}=d</code> a line of the velocity lattice; the explanation below the results lists them all). Motion, walls and
+collisions are all rules of this kind: Stream, Reflect, Exchange, Swap, Turn are in the presets and can be edited like
+any other rule. Edit a rule in the drawing or in the text, both show the same rule. The rule set runs its ticked rules
+in order in every step (rules with a hop label once per round of a step), so the order matters: Reflect and the collision
+rules go before Stream, which takes the hop. Choose the <em>starting universe</em> (world
+size, walls, where the balls begin, their velocities), then <em>Apply</em>: the run is recomputed in Python at once, and
+the measured diffusion, drift, wall rate, collisions, momentum and energy are shown next to what the rules predict.
+<em>Save result page</em> writes everything into one self-contained HTML file.</p>
 
 <h3>1a. Rules</h3>
 <div class="row">
@@ -82,17 +87,19 @@ into one self-contained HTML file.</p>
 </div>
 <div>
 <p class="muted">Graphical editor of the selected rule. Click a node, then another node of the same side, to add or remove the edge
-between them (a walker keeps a single edge: connecting it elsewhere moves it). Click an edge to remove it. <em>+ site</em> /
-<em>+ walker</em> add a variable to both sides; double-click a node to rename it. The built-in rules <em>Stream</em> and
-<em>Reflect</em> (hyperedge walkers) are drawn but cannot be edited.</p>
+between them (a walker keeps a single hyperedge: connecting it to a site moves it, connecting it to a velocity extends it to
+<code>{w,s,v}</code>). Click an edge to remove it. <em>+ site</em> / <em>+ walker</em> / <em>+ velocity</em> add a variable
+to both sides; double-click a node to rename it. Annotations (<code>_k</code>, <code>=d</code>, <code>|k</code>,
+<code>^</code>) are written in the text below; the drawing shows them on the edges.</p>
 <div class="pattern-editor">
-  <div><span class="side-label">left side: the pattern to find</span><svg id="pg-lhs" viewBox="0 0 240 150"></svg></div>
+  <div><span class="side-label">left side: the pattern to find</span><svg id="pg-lhs" viewBox="0 0 240 170"></svg></div>
   <div class="arrow">&rarr;</div>
-  <div><span class="side-label">right side: what replaces it</span><svg id="pg-rhs" viewBox="0 0 240 150"></svg></div>
+  <div><span class="side-label">right side: what replaces it</span><svg id="pg-rhs" viewBox="0 0 240 170"></svg></div>
 </div>
 <div class="buttons">
   <button id="pg-add-site">+ site</button>
   <button id="pg-add-walker">+ walker</button>
+  <button id="pg-add-velocity">+ velocity</button>
   <button id="pg-remove-node" disabled>Remove selected node</button>
   <span id="pg-editor-hint" class="muted"></span>
 </div>
@@ -103,7 +110,7 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
   <label>self-loops (walls) <select id="pg-loops"><option value="allow">allow: a walker at the wall may stay</option><option value="forbid">forbid: it must move</option></select></label>
   <label class="wide">description (what the rule is meant to do) <input id="pg-description" type="text" value="" placeholder="free text, shown with the rule"></label>
   <label class="wide">rule (text, the notation of the report) <textarea id="pg-notation">{w,s}, {s,t} -> {w,t}, {s,t}</textarea></label>
-  <label class="wide">direction weights of every chain edge <div class="weights">
+  <label class="wide">direction weights of every drawn edge <div class="weights">
     <label>+x <input id="pg-w0" type="number" value="0.25" min="0" step="0.05"></label>
     <label>&minus;x <input id="pg-w1" type="number" value="0.25" min="0" step="0.05"></label>
     <label>+y <input id="pg-w2" type="number" value="0.25" min="0" step="0.05"></label>
@@ -122,25 +129,20 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
 <p id="pg-error" class="error"></p>
 <p id="pg-physics"></p>
 
-<h3>1b. Walker model, collisions, overlapping matches, starting universe and run</h3>
+<h3>1b. Starting universe, velocities, overlapping matches and run</h3>
 <form class="params" id="playground" onsubmit="return false;">
-  <label>walker model <select name="walker_model">
-    <option value="edge">edge {w,s}: position only, no interaction</option>
-    <option value="hyperedge">hyperedge {w,s,s'}: position + heading, one walker per channel</option>
+  <label>velocities at the start <select name="velocity">
+    <option value="rest">rest: random walkers (v = 0)</option>
+    <option value="unit">unit: random unit velocities (the lattice gas)</option>
+    <option value="random">random: integer velocities up to the max speed</option>
   </select></label>
-  <label>collisions <select name="collisions">
-    <option value="none">none</option>
-    <option value="hpp">hpp: head-on pairs scatter at right angles (hyperedge walkers)</option>
-  </select></label>
+  <label>max speed (cells per step) <input name="max_speed" type="number" value="2" min="0" max="4" step="1"></label>
+  <label>ball radius (0 = one node) <input name="radius" type="number" value="0" min="0" max="2" step="1"></label>
   <label>overlapping matches <select name="overlaps">
     <option value="parallel">parallel: every match is applied</option>
     <option value="ordered">ordered: walker 0 first, a match sharing an edge waits</option>
     <option value="random">random order, a match sharing an edge waits</option>
     <option value="oldest">oldest first: the walker that waited longest goes first</option>
-  </select></label>
-  <label>initial heading (hyperedge walkers) <select name="heading">
-    <option value="random">random, distinct per site</option>
-    <option value="+x">+x</option><option value="-x">&minus;x</option><option value="+y">+y</option><option value="-y">&minus;y</option>
   </select></label>
   <label>world size (sites per side) <input name="size" type="number" value="7" min="3" max="25" step="1"></label>
   <label>walls <select name="walls"><option value="reflecting">reflecting (self-loops at the edge)</option><option value="periodic">periodic (wrap around)</option></select></label>
@@ -151,6 +153,8 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
     <option value="random">random sites</option>
     <option value="left">random sites, left half</option>
     <option value="sites">clicked sites</option>
+    <option value="head-on">two balls head-on</option>
+    <option value="diagonal">two balls at right angles</option>
   </select></label>
   <label>steps <input name="steps" type="number" value="40" min="1" max="300" step="1"></label>
   <label>seed <input name="seed" type="number" value="1" step="1"></label>
@@ -158,20 +162,22 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
 </form>
 <div class="row">
 <div>
-<p class="muted">The starting universe. Click a site to put a walker there, click it again to take one away. Every walker keeps
-its colour and number in every view; hyperedge walkers carry an arrow along their heading.</p>
+<p class="muted">The starting universe. Click a site to put a ball there, click it again to take one away. Every ball keeps
+its colour and number in every view; a moving ball carries an arrow along its velocity.</p>
 <canvas id="pg-universe-canvas" width="400" height="400"></canvas>
 <p id="pg-universe-label" class="muted"></p>
 </div>
 <div>
-<p class="muted">The rule set, one step in four phases (state, match, choose, rewrite) for walker 0.</p>
+<p class="muted">The rule set, one step in four phases (state, match, choose, rewrite) for ball 0: the sites it visited in
+the step.</p>
 <canvas id="pg-rule-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="pg-rule-play">Play</button><input id="pg-rule-slider" type="range"><span id="pg-rule-label" class="label"></span></div>
 <p id="pg-rule-phase" class="muted"></p>
 </div>
 <div>
-<p class="muted">The graph, step by step: the walkers on the small world (arrows: headings of hyperedge walkers; a ring marks a
-walker that collided in this step), and below it the 2D projection: the walkers as particles at their sites.</p>
+<p class="muted">The graph, step by step: the balls on the small world (arrows: velocities; a ring marks a ball whose
+velocity a rule changed in this step, a collision or a bounce), and below it the 2D projection: the balls as particles at
+their sites.</p>
 <canvas id="pg-demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="pg-demo-play">Play</button><input id="pg-demo-slider" type="range"><span id="pg-demo-label" class="label"></span></div>
 <p id="pg-demo-caption" class="muted"></p>
@@ -209,7 +215,7 @@ walker that collided in this step), and below it the 2D projection: the walkers 
 </div>
 <p class="muted">The reference always runs with D = a&sup2; / (4&tau;), the value of the uniform random hop. A rule with a
 drift or a different number of hops is <em>supposed</em> to fail the checks; that is the experiment. Smaller runs finish
-faster in the browser.</p>
+faster in the browser. Only chain rules (balls at rest) go into this run.</p>
 </div>
 
 <div id="results">
@@ -268,11 +274,11 @@ systems. The occupancy entropy rises towards ln(bins), on average but not monoto
 
 <h2>Balls bouncing in a room: a graph gas held against the hard-disk gas</h2>
 <div class="card">
-<p>Several rigid balls, each one walker node (or the nodes within a radius), move in straight lines with integer velocities,
-bounce elastically off the walls and collide with each other by a <em>collision rule</em> you choose. No gravity, no
-friction. The same balls, from the same start, also run as a traditional hard-disk gas: that is the reference, and the
-2D projection of the graph system is held against it frame by frame. Energy, momentum, entropy and the speed distribution
-are tracked for both.</p>
+<p>Several balls, each one walker node (or the nodes within a radius), move in straight lines with integer velocities,
+bounce elastically off the walls and collide with each other by a <em>collision rule set</em> you choose: a preset of the
+rules above, or the playground's own ticked rule set. No gravity, no friction. The same balls, from the same start, also
+run as a traditional hard-disk gas: that is the reference, and the 2D projection of the graph system is held against it
+frame by frame. Energy, momentum, entropy and the speed distribution are tracked for both.</p>
 <form class="params" id="balls" onsubmit="return false;">
   <label>room size (sites per side) <input name="size" type="number" value="10" min="4" max="20" step="1"></label>
   <label>balls <input name="balls" type="number" value="6" min="1" max="20" step="1"></label>
@@ -280,10 +286,11 @@ are tracked for both.</p>
   <label>max speed (cells per step) <input name="max_speed" type="number" value="2" min="0" max="4" step="1"></label>
   <label>steps <input name="steps" type="number" value="80" min="1" max="300" step="1"></label>
   <label>seed <input name="seed" type="number" value="0" step="1"></label>
-  <label>collision rule <select name="rule">
-    <option value="exchange">exchange: elastic, exact along axes, swap fallback on odd diagonal hits</option>
-    <option value="swap">swap: always exchange the velocity vectors</option>
-    <option value="none">none: balls pass through each other</option>
+  <label>collision rule set <select name="rule">
+    <option value="exchange">exchange: Reflect, Exchange, Swap, Stream (elastic, exact along axes)</option>
+    <option value="swap">swap: Reflect, Swap, Stream (every hit head-on)</option>
+    <option value="hpp">hpp: Reflect, Turn, Swap, Stream (the lattice gas)</option>
+    <option value="custom">the playground's ticked rule set</option>
   </select></label>
   <label>placement <select name="placement">
     <option value="left">random sites of the left half, random velocities</option>
@@ -328,6 +335,8 @@ colour and number in all three views, as the walkers of the playground do; a rin
 <div class="row"><div id="bg-energy-chart"></div><div id="bg-momentum-chart"></div></div>
 <div class="row"><div id="bg-entropy-chart"></div><div id="bg-collisions-chart"></div></div>
 <div class="row"><div id="bg-speed-chart"></div><div id="bg-occupancy"></div></div>
+<h3>The rules of this run</h3>
+<div id="bg-rules"></div>
 <div id="bg-docs"></div>
 </div>
 </main>

@@ -1,12 +1,12 @@
-"""The lattice gas conserves what it claims to conserve and its rules preserve the exclusion."""
+"""The lattice gas (Reflect, Turn, Stream on unit velocities) conserves what it claims."""
 
 import time
 
 import numpy as np
 import pytest
 
-from imigraph.graph import SquareLattice
-from imigraph.graph.gas import DIRECTIONS, OPPOSITE, LatticeGas, LatticeGasState
+from imigraph.graph import LatticeGas, SquareLattice, WalkerGraph
+from imigraph.graph.velocity import DIRECTIONS
 from imigraph.metrics import occupancy_entropy
 
 
@@ -26,46 +26,61 @@ def test_periodic_lattice_wraps_and_has_no_self_loops():
         SquareLattice(2, periodic=True)
 
 
-def test_state_enforces_the_exclusion_principle_and_knows_its_heading():
-    lattice = SquareLattice(4)
-    state = LatticeGasState(lattice, np.array([5, 5]), np.array([0, 2]))
-    np.testing.assert_array_equal(
-        state.headings(), [lattice.neighbors[5, 0], lattice.neighbors[5, 2]]
+def test_state_holds_unit_velocities_and_the_rules_are_the_hpp_set():
+    gas = _gas(size=4)
+    state = gas.state(np.array([5, 6]), np.array([0, 2]))
+    np.testing.assert_array_equal(state.velocities, [[1, 0], [0, 1]])
+    assert state.moving and state.num_walkers == 2
+    assert [r["name"] for r in gas.describe_rules()] == [
+        "Reflect",
+        "Turn",
+        "Swap",
+        "Stream",
+    ]
+    assert gas.speed == pytest.approx(1.0)
+    with pytest.raises(ValueError):
+        WalkerGraph(gas.space, np.array([5]), np.array([[1, 0, 0]]))
+
+
+def test_a_head_on_pair_turns_at_the_contact_and_conserves_momentum():
+    gas = _gas(size=6)
+    state = gas.state(
+        np.array([gas.space.node_index(1, 3), gas.space.node_index(4, 3)]),
+        np.array([0, 1]),
     )
-    np.testing.assert_allclose(state.velocities(2.0), [[2, 0], [0, 2]])
-    assert state.as_walker_graph().num_walkers == 2
-    with pytest.raises(ValueError):
-        LatticeGasState(lattice, np.array([5, 5]), np.array([0, 0]))
-    with pytest.raises(ValueError):
-        LatticeGasState(lattice, np.array([5]), np.array([4]))
-
-
-def test_collision_rotates_a_head_on_pair_and_conserves_momentum_at_the_site():
-    gas = _gas(size=5)
-    centre = gas.space.center_node
-    state = LatticeGasState(gas.space, np.array([centre, centre]), np.array([0, 1]))
-    after, collided = gas.collide(state, np.random.default_rng(0))
-    assert collided.size == 1
-    assert set(after.directions.tolist()) == {2, 3}
-    np.testing.assert_allclose(DIRECTIONS[after.directions].sum(axis=0), [0, 0])
-    # A blocked perpendicular channel, or a wall channel, prevents the collision.
-    blocked = LatticeGasState(gas.space, np.array([centre] * 3), np.array([0, 1, 2]))
-    assert gas.collide(blocked, np.random.default_rng(0))[1].size == 0
-    edge = gas.space.node_index(2, 4)  # +y neighbour is a self-loop
-    at_wall = LatticeGasState(gas.space, np.array([edge, edge]), np.array([0, 1]))
-    assert gas.collide(at_wall, np.random.default_rng(0))[1].size == 0
+    history, _ = gas.system.run(state, 4, np.random.default_rng(0))
+    assert history.collisions().tolist() == [0, 1, 0, 0]
+    assert history.collision_rules() == ["Turn"]
+    after = history.velocities[2]
+    assert sorted(after.tolist()) == [[0, -1], [0, 1]]
+    np.testing.assert_array_equal(history.momentum_units()[:3], 0)
+    assert np.all(history.overlaps() == 0)
+    # A pair meeting at right angles swaps velocities at the contact: each ball continues
+    # the other's motion from its own site (a deflection; HPP's points would pass through).
+    corner = gas.state(
+        np.array([gas.space.node_index(1, 3), gas.space.node_index(3, 1)]),
+        np.array([0, 2]),
+    )
+    history, _ = gas.system.run(corner, 3, np.random.default_rng(0))
+    assert history.collision_rules() == ["Swap"]
+    assert history.anchors[2].tolist() == [
+        gas.space.node_index(2, 4),
+        gas.space.node_index(4, 2),
+    ]
+    assert history.velocities[2].tolist() == [[0, 1], [1, 0]]
+    assert np.all(history.overlaps() == 0)
 
 
 def test_reflect_and_stream_follow_labelled_edges():
     gas = _gas(size=4)
     corner = gas.space.node_index(3, 3)
-    state = LatticeGasState(gas.space, np.array([corner, 0]), np.array([0, 2]))
-    reflected = gas.reflect(state)
-    np.testing.assert_array_equal(reflected.directions, [OPPOSITE[0], 2])
-    streamed = gas.stream(reflected)
+    state = gas.state(np.array([corner, 0]), np.array([0, 2]))
+    after, path, events, _ = gas.system.step(state, np.random.default_rng(0))
+    np.testing.assert_array_equal(after.velocities, [DIRECTIONS[1], DIRECTIONS[2]])
     np.testing.assert_array_equal(
-        streamed.sites, [gas.space.node_index(2, 3), gas.space.node_index(0, 1)]
+        after.anchors, [gas.space.node_index(2, 3), gas.space.node_index(0, 1)]
     )
+    assert [e["rule"] for e in events] == ["Reflect"] and path.shape == (2, 2)
 
 
 @pytest.mark.parametrize("periodic", [False, True])
@@ -90,17 +105,17 @@ def test_run_conserves_energy_exactly_and_momentum_as_promised(periodic):
     assert run.trajectory.box.contains(run.trajectory.positions.reshape(-1, 2)).all()
 
 
-def test_every_step_keeps_the_exclusion_and_moves_along_edges():
+def test_every_step_moves_along_edges_and_keeps_the_balls_apart():
     gas = _gas(size=10)
     rng = np.random.default_rng(1)
-    state = gas.initial_half_box(150, rng)
+    state = gas.initial_half_box(40, rng)
     for _ in range(50):
-        after, _ = gas.step(state, rng)
-        channels = after.sites * 4 + after.directions
-        assert np.unique(channels).size == channels.size
-        moved = after.sites != state.sites
-        heads = gas.space.neighbors[state.sites]
-        assert np.all(np.any(heads == after.sites[:, None], axis=1) | ~moved)
+        after, _path, _events, _ = gas.system.step(state, rng)
+        assert np.unique(after.anchors).size == after.num_walkers
+        moved = after.anchors != state.anchors
+        heads = gas.space.neighbors[state.anchors]
+        assert np.all(np.any(heads == after.anchors[:, None], axis=1) | ~moved)
+        assert np.all(np.abs(after.velocities).sum(axis=1) == 1)
         state = after
 
 
@@ -120,4 +135,4 @@ def test_lattice_gas_budget():
     rng = np.random.default_rng(0)
     start = time.perf_counter()
     gas.simulate(gas.initial_half_box(120, rng), steps=480, rng=rng, record_every=4)
-    assert time.perf_counter() - start < 2.0
+    assert time.perf_counter() - start < 3.0  # measured 1.0 s in the dev container

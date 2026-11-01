@@ -14,8 +14,16 @@ whether the imitation holds. Read [docs/requirements.md](docs/requirements.md) f
 is validated. Plans per issue live in [plans/](plans/).
 
 The second experiment: an energy-conserving hard-disk gas (the reference) next to a lattice gas
-on the same walker graph, whose rules (Collide, Reflect, Stream, the HPP model as edge
-rewrites) conserve mass, momentum and energy exactly and make walkers collide.
+on the same walker graph, whose rules (Reflect, Turn, Swap, Stream, the HPP model as rewrites
+of ball hyperedges) conserve mass, momentum and energy exactly and make walkers collide.
+
+There is one kind of walker, the *ball* `{w,s,v}`: a walker node on a site of the room with its
+velocity, a node of a second lattice, the velocity lattice of integer vectors. A ball at rest is
+the random walker, a ball with a unit velocity the walker of the lattice gas, a ball with any
+integer velocity a ball of the ball gas. Motion, walls and collisions are all rules in one
+annotated notation (`{w,s,v}_k, {s,t}_k -> {w,t,v}` is free flight, `{w,s,v}_k, {s,s}_k,
+{v,v'}|k -> {w,s,v'}` the wall, the elastic collision the rectangle spanned by two velocities
+in the velocity lattice), executed by one matcher; none of the physics is a formula in the code.
 
 ```bash
 docker compose run --rm dev uv run python -m imigraph report       # writes output/brownian_vs_graph_<time>.html
@@ -33,17 +41,15 @@ package in the browser (Pyodide): a *playground* with a rule editor and a small 
 comparison run with parameters of your choice. The rule editor keeps a list of rules (presets
 and your own: add, duplicate, delete, reorder; ticked rules run in order in every step) and
 edits the selected one both as a drawing (click nodes to connect them, click edges to remove
-them, add sites and walkers) and as text (the notation of the report, direction weights,
-self-loops). The *starting universe* is the world size, the walls (reflecting or periodic) and
-where the walkers begin (centre, corner, random, left half, or sites you click). *Apply* runs
-it at the chosen playback speed and compares measured drift, diffusion and wall rate with the
-rules' prediction; *Save result page* downloads one self-contained HTML page of the run, and
-*Export session JSON* the file that reproduces it from the command line:
-
-The *walker model* (edge walkers that never interact, or hyperedge walkers with a heading and
-the exclusion principle) and the *collisions* (none, or the HPP collision of the lattice gas)
-are part of the rule configuration; the built-in rules Stream and Reflect with hpp collisions
-are the lattice gas. Every rule has a description. The page explains the models and collisions.
+them, add sites, walkers and velocities) and as text (the notation of the report, direction
+weights, self-loops). The *starting universe* is the world size, the walls (reflecting or
+periodic), where the balls begin (centre, corner, random, left half, sites you click, or two
+balls head-on or at right angles) and their velocities (rest, random unit velocities, random
+integer velocities up to a max speed; a ball radius for bodies). *Apply* runs it at the chosen
+playback speed and shows measured drift, diffusion, wall rate, collisions, momentum and energy
+next to what the rules predict, with a caption per step naming the rule that fired; *Save
+result page* downloads one self-contained HTML page of the run, and *Export session JSON* the
+file that reproduces it from the command line:
 
 ```bash
 docker compose run --rm dev uv run python -m imigraph playground-report --request-file docs/examples/playground-session.json --label my-rules
@@ -51,11 +57,12 @@ docker compose run --rm dev uv run python -m imigraph playground-report --reques
 docker compose run --rm dev uv run python -m imigraph report --rule '[{"name":"Hop","notation":"{w,s}, {s,t} -> {w,t}, {s,t}"}]'
 ```
 
-The GUI's "Balls bouncing in a room" is Newtonian motion without gravity: rigid balls of walker
-nodes with integer velocities bounce elastically off the walls and collide with each other by a
-configurable rule (`imigraph.graph.balls`), shown as the graph, as its 2D projection and next
-to a hard-disk gas started from the same state (`imigraph.experiments.balls`); energy,
-momentum, entropy and the speed distribution are tracked and checked for both.
+The GUI's "Balls bouncing in a room" is Newtonian motion without gravity: balls with integer
+velocities bounce elastically off the walls and collide with each other by a collision rule set
+(the presets exchange, swap and hpp of `imigraph.graph.balls`, or the playground's own ticked
+rules), shown as the graph, as its 2D projection and next to a hard-disk gas started from the
+same state (`imigraph.experiments.balls`); energy, momentum, entropy and the speed distribution
+are tracked and checked for both, and the rules of the run are listed with their patterns.
 
 Published pages: [imigraph-reports](https://github.com/molntamas/imigraph-reports).
 

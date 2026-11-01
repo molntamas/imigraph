@@ -37,43 +37,46 @@ shared consumer.
 
 - **Gas page** (`imigraph.report.gas`, template `assets/gas.html`, `python -m imigraph
   gas-report`): hard-disk gas and lattice gas side by side, the lattice-gas rule demo
-  (`default_gas_demo`, arrows + collision rings), both check tables (`_checks_table(report,
+  (`default_gas_demo`, `drawAgents` with velocities and event rings), both check tables (`_checks_table(report,
   informative)` lists non-counting checks as `info: would pass/fail`), the cross-comparison and
   overlaid charts.
 - **Graph-model Q&A** (`assets/graph-model.html`) is inserted into both pages as `$graph_model`;
   update it when the answers change (graph type, node types, how energy/momentum/entropy are
   computed, what collisions do).
 - **Playground**: `imigraph.report.live.playground(request)` runs a small world from a
-  starting universe (`size`, `walls`, `walkers`, `placement`, `sites`), a walker model
-  (`walker_model` edge / hyperedge, `collisions` none / hpp, `heading` of hyperedge walkers,
-  `overlaps` parallel / ordered / random / oldest for overlapping matches; see `graph/world.py`) and a rule set (`RuleSpec` JSON and built-in entries, a list) and
-  returns the demo (matched chains, and `directions` + `collisions` per frame for hyperedge
-  walkers), the rule descriptions (Collide first when on, each with an SVG `pattern` and the
-  author's `description`), the `model`, the `docs` (the HTML of `assets/collisions.html` and `assets/overlaps.html`, the
-  explanation of walker models, collisions and overlapping matches shown under the rules table
-  on the GUI and the saved page), the resolved `universe`, measured vs predicted drift/diffusion (plus blocked
-  hops and collision counts for hyperedge walkers), or `{"error": message}` for an
-  unsupported rule or universe. `viz.js` draws hyperedge walkers with `drawArrows` and the
-  collision sites with `drawCollisionMarks`. Hyperedge runs also return `captions` (one per
-  frame from `world.explain_frames`: what Collide, Reflect and Stream did, the total momentum)
-  shown under the step-by-step animation, and `headings` per walker may be given explicitly
-  for clicked sites. Every view draws agents (walkers, balls, disks) with `viz.drawAgents`: one colour and
-  number per agent, an arrow for a heading or a velocity, a ring when marked; the playground
-  shows the graph and a 2D projection, the ball section the graph, the projection and the
-  reference. The worked collision example is the head-on preset of the ball section. `web/app.js` keeps the rule list
-  (`library`, persisted in `localStorage`), the graphical editor (`pattern`, `renderPattern`,
-  `clickNode`; same layout as `svg.pattern_layout`), the text editor (`editorChanged`), the
-  universe canvas (`drawUniverse`), export / import (rule, rule set, session) and *Save result
-  page* (`live.playground_page_json`, a Blob download). "Use the rule set in the comparison
-  run" writes the JSON list into the hidden `rule` field of the run form.
+  starting universe (`size`, `walls`, `walkers`, `placement` incl. `head-on` / `diagonal`,
+  `sites`; the balls' `velocity` rest / unit / random, `max_speed`, `radius`, or explicit
+  `velocities`; `overlaps` parallel / ordered / random / oldest for overlapping matches; see
+  `graph/world.py`) and a rule set (a list of `RuleSpec` JSON in the annotated notation) and
+  returns the demo (`anchors`, `paths` = the sites visited per step, `velocities` and
+  `events` per frame), the rule descriptions (each with an SVG `pattern` and the author's
+  `description`), the `model` (`moving`, `interacting`), the `docs` (the HTML of
+  `assets/collisions.html`, the ball, the two lattices and the rule library, and
+  `assets/overlaps.html`, shown under the rules table on the GUI and the saved page), the
+  resolved `universe`, `captions` (one per frame from `GraphHistory.captions`: the rules that
+  fired, the total momentum), measured vs predicted drift/diffusion plus collisions (per
+  rule), bounces, momentum and energy, or `{"error": message}` for an unsupported rule or
+  universe. Every view draws agents (walkers, balls, disks) with `viz.drawAgents`: one colour
+  and number per agent, an arrow for a velocity, a ring when a rule changed its velocity in
+  the step; the playground shows the graph and a 2D projection, the ball section the graph,
+  the projection and the reference. The worked collision example is the head-on preset of the
+  ball section. `web/app.js` keeps the rule list (`library`, persisted in `localStorage`; the
+  presets include Kick, Stream, Reflect, Exchange, Swap and Turn in the library's notation),
+  the graphical editor (`pattern` with edges `{vars, op, arg}`, `renderPattern`, `clickNode`;
+  three node types, annotations drawn on the edges, same layout as `svg.pattern_layout`), the
+  text editor (`editorChanged`), the universe canvas (`drawUniverse`), export / import (rule,
+  rule set, session) and *Save result page* (`live.playground_page_json`, a Blob download).
+  "Use the rule set in the comparison run" writes the chain rules (`isChainRule`) into the
+  hidden `rule` field of the run form.
 - **Balls bouncing in a room** (`live.balls(request)`, GUI section of that name): the ball
-  gas (`experiments/balls.py`) next to the hard-disk reference from the same start; returns
-  `data` (`report.balls.ball_page_data`: the graph run with sites per ball, centres,
-  velocities, events, captions; the reference positions), `fragments`
-  (`report.balls.ball_fragments`: checks tables, comparison table, charts), `docs`
-  (`assets/balls.html`) and a `summary`. `web/app.js` draws the graph, the projection and the
-  reference in `renderBalls`; the form `#balls` reruns on change. `live.newton` (one ball,
-  `assets/newton.html`) stays as the single-ball core without a GUI section.
+  gas (`experiments/balls.py`, `rule` exchange / swap / hpp or `custom` with the request's
+  `rules` list) next to the hard-disk reference from the same start; returns `data`
+  (`report.balls.ball_page_data`: the graph run with sites per ball, centres, velocities,
+  events, captions, collisions per rule; the reference positions), `fragments`
+  (`report.balls.ball_fragments`: checks tables, comparison table, charts, `rules_table`),
+  `rules` (the descriptions with patterns), `docs` (`assets/balls.html`) and a `summary`.
+  `web/app.js` draws the graph, the projection and the reference in `renderBalls`; the form
+  `#balls` reruns on change, `custom` sends the playground's ticked rules.
 - **Playground page** (`imigraph.report.playground`, template `assets/playground.html`,
   `python -m imigraph playground-report --request-file session.json`): rules table with
   patterns, universe table and canvas, the two animations, measured vs predicted, the session

@@ -32,24 +32,40 @@ def _kv_table(rows: list[tuple[str, str]]) -> str:
 def _measured_table(result: dict[str, Any]) -> str:
     m, p = result["measured"], result["predicted"]
     f = lambda x: f"{float(x):.3f}"
-    model = result.get("model", {"walker_model": "edge", "collisions": "none"})
+    model = result.get("model", {})
     extra: list[tuple[str, str]] = []
-    if model["walker_model"] == "hyperedge":
+    if model.get("moving"):
+        by_rule = ", ".join(
+            f"{v} by {k}" for k, v in (m.get("collisions_by_rule") or {}).items()
+        )
         extra = [
             (
-                "blocked hops (fraction of walkers per step, exclusion)",
-                f(m["blocked_rate"]),
+                "collisions in the run",
+                f"{m['collisions']}" + (f" ({by_rule})" if by_rule else ""),
+            ),
+            ("wall bounces in the run", str(m["bounces"])),
+            (
+                "total momentum at the start / end (m a/tau), steps where it changed",
+                (
+                    f"({m['momentum_start'][0]}, {m['momentum_start'][1]}) / "
+                    f"({m['momentum_end'][0]}, {m['momentum_end'][1]}), "
+                    f"{m['momentum_changes']}"
+                ),
             ),
             (
-                f"collisions in the run (collisions: {model['collisions']})",
-                str(m["collisions"]),
+                "kinetic energy (m a^2/tau^2)",
+                f"{m['energy']:g}, "
+                + ("constant" if m["energy_constant"] else "changed during the run"),
             ),
         ]
     return _kv_table(
         [
             (
-                "walker model / collisions / overlapping matches",
-                f"{model['walker_model']} / {model['collisions']} / {model.get('overlaps', 'parallel')}",
+                "velocity / max speed / radius / overlapping matches",
+                (
+                    f"{model.get('velocity', 'rest')} / {model.get('max_speed', 0)} / "
+                    f"{model.get('radius', 0)} / {model.get('overlaps', 'parallel')}"
+                ),
             ),
             (
                 "waiting hops (fraction of walkers per step, overlapping matches)",
@@ -67,7 +83,7 @@ def _measured_table(result: dict[str, Any]) -> str:
                     f"({f(p['drift'][0])}, {f(p['drift'][1])})"
                 ),
             ),
-            ("hops per step (predicted)", str(p["hops"])),
+            ("chain hops per step (predicted)", str(p["hops"])),
             ("wall rate (fraction of walkers per step)", f(m["wall_rate"])),
             ("occupied sites at the end", str(m["occupied_final"])),
             *extra,
@@ -78,22 +94,25 @@ def _measured_table(result: dict[str, Any]) -> str:
 def _universe_table(universe: dict[str, Any]) -> str:
     sites = universe["sites"]
     shown = ", ".join(str(s) for s in sites[:12]) + (" ..." if len(sites) > 12 else "")
-    model = universe.get("walker_model", "edge")
+    velocities = universe.get("velocities")
+    shown_v = (
+        "all at rest"
+        if not velocities
+        else ", ".join(f"({v[0]},{v[1]})" for v in velocities[:12])
+        + (" ..." if len(velocities) > 12 else "")
+    )
     return _kv_table(
         [
             ("world", f"{universe['size']} x {universe['size']} square lattice"),
             ("walls", str(universe["walls"])),
-            ("walker model", str(model)),
-            ("collisions", str(universe.get("collisions", "none"))),
+            ("velocity", str(universe.get("velocity", "rest"))),
+            ("max speed (cells per step)", str(universe.get("max_speed", 0))),
+            ("ball radius (cells)", str(universe.get("radius", 0))),
             ("overlapping matches", str(universe.get("overlaps", "parallel"))),
-            *(
-                [("initial heading", str(universe.get("heading")))]
-                if model == "hyperedge"
-                else []
-            ),
             ("walkers", str(universe["walkers"])),
             ("placement", str(universe["placement"])),
             ("starting sites (node indices)", shown),
+            ("starting velocities", shown_v),
             ("steps", str(universe["steps"])),
             ("seed", str(universe["seed"])),
             (
@@ -113,6 +132,7 @@ def build_playground_page(
         raise ValueError(result["error"])
     request = request or {}
     names = [spec["name"] for spec in result["specs"]]
+    model = result.get("model", {})
     template = Template(_asset("playground.html"))
     return template.substitute(
         css=_asset("report.css"),
@@ -122,9 +142,9 @@ def build_playground_page(
         num_rules=len(names),
         rules_table=_rules_table(result["rules"]),
         docs=result.get("docs", ""),
-        walker_model=escape(result.get("model", {}).get("walker_model", "edge")),
-        collisions=escape(result.get("model", {}).get("collisions", "none")),
-        overlaps=escape(result.get("model", {}).get("overlaps", "parallel")),
+        velocity=escape(str(model.get("velocity", "rest"))),
+        radius=escape(str(model.get("radius", 0))),
+        overlaps=escape(str(model.get("overlaps", "parallel"))),
         universe_table=_universe_table(result["universe"]),
         measured_table=_measured_table(result),
         request_json=escape(json.dumps(request, indent=2)),

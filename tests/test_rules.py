@@ -1,4 +1,5 @@
-"""Rules as data: parsing, validation messages, and the physics the chain rule family produces."""
+"""Rules as data: parsing, validation messages, the physics the chain rule family produces,
+and the ball rules of the library as graph rewrites."""
 
 import json
 
@@ -7,8 +8,23 @@ import pytest
 
 from imigraph.experiments import ExperimentConfig, run_experiment
 from imigraph.graph import GraphSimulation, RandomHop, SquareLattice, walkers_at_node
-from imigraph.graph.rules import RANDOM_HOP, ChainRule, Rule, RuleSpec, rule_from_spec
+from imigraph.graph.rules import (
+    EXCHANGE,
+    LIBRARY,
+    RANDOM_HOP,
+    REFLECT,
+    STREAM,
+    SWAP,
+    TURN,
+    BallRule,
+    ChainRule,
+    Rule,
+    RuleSpec,
+    rule_from_spec,
+    rule_item,
+)
 from imigraph.graph.simulation import lattice_hop_diffusion
+from imigraph.graph.state import WalkerGraph
 
 
 def test_notation_round_trip_and_json():
@@ -17,11 +33,31 @@ def test_notation_round_trip_and_json():
     )
     assert spec.notation == "{w,s}, {s,t}, {t,u} -> {w,u}, {s,t}, {t,u}"
     assert spec.chain() == ("w", ["s", "t", "u"], 2) and spec.hops == 2
+    assert spec.family == "chain"
     data = json.loads(json.dumps(spec.to_dict()))
     assert RuleSpec.from_dict(data) == spec
     assert data["types"] == {"w": "walker", "s": "site", "t": "site", "u": "site"}
+    assert data["family"] == "chain"
     assert RuleSpec.from_dict({"name": "x", "notation": spec.notation}).hops == 2
     assert RandomHop().spec == RANDOM_HOP
+
+
+def test_annotated_notation_round_trips_and_classifies_as_a_ball_rule():
+    for spec in LIBRARY:
+        again = RuleSpec.parse(spec.notation, name=spec.name)
+        assert again.notation == spec.notation and again.family == "ball"
+        assert RuleSpec.from_dict(json.loads(json.dumps(spec.to_dict()))) == spec
+        assert spec.hops == 0 and not spec.drift(1, 1).any()
+    plan = EXCHANGE.plan()
+    assert plan.is_pair and plan.is_round and plan.unknowns == ("v1'", "v2'")
+    assert SWAP.plan().unknowns == () and SWAP.plan().is_pair
+    assert plan.hop_targets == {"w1": "x", "w2": "x"}
+    assert [b.walker for b in plan.balls] == ["w1", "w2"]
+    assert not STREAM.plan().is_pair and STREAM.plan().is_round
+    assert not RuleSpec.parse("{w,s,v}, {s,t}_k, {o,v'}_k -> {w,t,v'}").plan().is_round
+    assert isinstance(rule_item(STREAM), BallRule)
+    assert isinstance(rule_item(RANDOM_HOP), ChainRule)
+    assert RuleSpec.parse("{w,s,v}_k, {s,t}_k -> {w,t,v}").type_of("v") == "velocity"
 
 
 @pytest.mark.parametrize(
@@ -29,10 +65,24 @@ def test_notation_round_trip_and_json():
     [
         ("{w,s}, {s,t}", "'->'"),
         ("{s,t} -> {s,t}", "exactly one walker edge"),
-        ("{w,s}, {w2,s} -> {w,s}, {w2,s}", "exactly one walker edge"),
         ("{w,s}, {t,u} -> {w,u}, {t,u}", "must form a chain"),
         ("{w,s}, {s,t} -> {w,s}", "keep the site edges"),
         ("{w,s}, {s,t} -> {w,q}, {s,t}", "end on a site of the chain"),
+        ("{w,s}, {w2,s} -> {w,s}, {w2,s}", "names both velocities"),
+        ("{w,s,v}, {w2,t,v2} -> {w,s,v}, {w2,t,v2}", "needs a contact"),
+        ("{w,s,v}_k, {s,t}_k -> {w,t,q}", "must be bound or solved"),
+        ("{w,s,v}_k, {s,t}_k, {v,v'}|j -> {w,t,v'}", "is not bound"),
+        ("{w,s,v}, {v,v'}=d -> {w,s,v'}", "direction d"),
+        (
+            "{w,s,v}_k, {s,t}_k, {v,v'}|k, {v,v''}^, {v,v'''}^ -> {w,t,v'}",
+            "at most two",
+        ),
+        ("{w,s,v}_k -> {w,t,v}", "bound on the left side"),
+        ("{w,s,v}_k, {s,t}_k -> {w,t,v}, {t,s}_k", "space is static"),
+        ("{w,s,v}_k, {s,t}_k -> {w,t,v}_k", "on the right side a ball"),
+        ("{w,s,v}_k, {s,t}_k, {w,t,v}_k -> {w,t,v}", "appears twice"),
+        ("{w,s,v}_k, {v,t}_k -> {w,s,v}", "mixes a velocity with a site"),
+        ("{w,s,v}_k, {s,t}_-k -> {w,t,v}", "plain variable or"),
     ],
 )
 def test_unsupported_patterns_are_rejected_with_a_reason(notation, message):
@@ -116,3 +166,89 @@ def test_experiment_runs_an_edited_rule_and_a_drift_fails_the_comparison():
     assert not result.passed
     with pytest.raises(ValueError, match="walker edge"):
         ExperimentConfig(rule={"notation": "{s,t} -> {s,t}"})
+    with pytest.raises(ValueError, match="ball rule"):
+        ExperimentConfig(rule=STREAM.to_dict())
+
+
+def _lattice_and_rule(spec, size=7):
+    return SquareLattice(size), BallRule(spec)
+
+
+def test_stream_moves_along_the_velocity_and_keeps_it():
+    lattice, stream = _lattice_and_rule(STREAM)
+    state = WalkerGraph(
+        lattice, np.array([24, 24, 10]), np.array([[1, 0], [0, -2], [0, 0]])
+    )
+    after = stream.apply(state, np.random.default_rng(0))
+    assert after.anchors.tolist() == [24 + 7, 24 - 1, 10]  # one hop per application
+    np.testing.assert_array_equal(after.velocities, state.velocities)
+    text = stream.describe()
+    assert text["name"] == "Stream" and "free flight" in text["physics"]
+    assert text["rewrite"] == STREAM.notation
+
+
+def test_reflect_mirrors_the_hit_component_only_at_the_wall():
+    lattice, reflect = _lattice_and_rule(REFLECT)
+    right_wall = lattice.node_index(6, 3)
+    state = WalkerGraph(lattice, np.array([right_wall, 24]), np.array([[2, 1], [2, 1]]))
+    after = reflect.apply(state, np.random.default_rng(0))
+    assert after.velocities.tolist() == [[-2, 1], [2, 1]]
+    np.testing.assert_array_equal(after.anchors, state.anchors)
+    # On a periodic lattice there is no wall: the rule never matches.
+    torus = SquareLattice(7, periodic=True)
+    state = WalkerGraph(torus, np.array([torus.node_index(6, 3)]), np.array([[2, 1]]))
+    assert reflect.apply(state, np.random.default_rng(0)).velocities.tolist() == [
+        [2, 1]
+    ]
+
+
+def test_exchange_is_the_rectangle_in_the_velocity_lattice_and_swap_the_diagonal():
+    lattice, exchange = _lattice_and_rule(EXCHANGE)
+    # Balls at (2,3) and (4,3) whose first hops meet at (3,3), line of centres +x;
+    # velocities (2,1) and (-2,2): the x components are exchanged, the y components kept.
+    state = WalkerGraph(
+        lattice,
+        np.array([lattice.node_index(2, 3), lattice.node_index(4, 3)]),
+        np.array([[2, 1], [-2, 2]]),
+    )
+    after = exchange.apply(state, np.random.default_rng(0))
+    assert after.velocities.tolist() == [[-2, 1], [2, 2]]
+    np.testing.assert_array_equal(after.anchors, state.anchors)
+    # A separating pair (no approach along the line of centres) is left alone.
+    apart = WalkerGraph(
+        lattice,
+        np.array([lattice.node_index(2, 3), lattice.node_index(3, 3)]),
+        np.array([[-1, 0], [1, 0]]),
+    )
+    assert exchange.apply(apart, np.random.default_rng(0)).velocities.tolist() == [
+        [-1, 0],
+        [1, 0],
+    ]
+    swap = BallRule(SWAP)
+    after = swap.apply(state, np.random.default_rng(0))
+    assert after.velocity.tolist() == [[-2, 2], [2, 1]]
+
+
+def test_turn_rotates_a_head_on_pair_either_way():
+    lattice, turn = _lattice_and_rule(TURN)
+    state = WalkerGraph(
+        lattice,
+        np.array([lattice.node_index(2, 3), lattice.node_index(4, 3)]),
+        np.array([[1, 0], [-1, 0]]),
+    )
+    senses = set()
+    for seed in range(12):
+        after = turn.apply(state, np.random.default_rng(seed))
+        v = after.velocities
+        assert v[0].tolist() in ([0, 1], [0, -1]) and v[1].tolist() == (-v[0]).tolist()
+        senses.add(tuple(v[0].tolist()))
+    assert senses == {(0, 1), (0, -1)}
+    oblique = WalkerGraph(
+        lattice,
+        np.array([lattice.node_index(2, 3), lattice.node_index(4, 3)]),
+        np.array([[1, 0], [-1, 1]]),
+    )
+    assert turn.apply(oblique, np.random.default_rng(0)).velocities.tolist() == [
+        [1, 0],
+        [-1, 1],
+    ]

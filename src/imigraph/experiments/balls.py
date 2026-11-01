@@ -4,7 +4,7 @@ simulation (the reference that reflects what we take to be the physics)."""
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import numpy as np
@@ -19,8 +19,12 @@ from imigraph.experiments.gas import (
     maxwell_check,
     momentum_check,
 )
-from imigraph.graph.balls import COLLISION_RULES, BallGas, BallGasRun, BallGasState
+from imigraph.graph.balls import COLLISION_RULES, collision_rules, place
+from imigraph.graph.rules import RuleSpec, rule_item, rule_specs
+from imigraph.graph.simulation import GraphHistory
 from imigraph.graph.space import SquareLattice
+from imigraph.graph.state import WalkerGraph
+from imigraph.graph.world import WalkerSystem
 from imigraph.metrics import occupancy_entropy
 from imigraph.reference.gas import HardDiskGas
 from imigraph.trajectory import Box
@@ -34,7 +38,9 @@ class BallGasConfig:
     ``1 / size``, step time ``1 / size`` so one cell per step is speed 1). Velocities are
     integers with components up to ``max_speed``. ``placement``: ``left`` (random sites of the
     left half, a free expansion), ``random``, ``head-on`` (two balls on one row flying at each
-    other), ``diagonal`` (two balls meeting at right angles, the fallback case)."""
+    other), ``diagonal`` (two balls meeting at right angles, the fallback case). ``rule`` names
+    a collision rule set of :mod:`imigraph.graph.balls`, or is ``custom`` with the rule list
+    ``rules`` (the playground's rule set, as JSON or :class:`RuleSpec`)."""
 
     size: int = 10
     balls: int = 6
@@ -45,6 +51,7 @@ class BallGasConfig:
     seed: int = 0
     entropy_bins: int = 5
     rule: str = "exchange"
+    rules: tuple[Any, ...] = field(default=(), compare=False)
     placement: str = "left"
     substeps: int = 8
     """Time steps of the hard-disk reference per lattice step."""
@@ -56,14 +63,28 @@ class BallGasConfig:
             raise ValueError("size must be >= 4")
         if self.balls < 1 or self.max_speed < 0 or self.radius < 0:
             raise ValueError("balls must be >= 1, max_speed and radius >= 0")
-        if self.rule not in COLLISION_RULES:
+        if self.rule != "custom" and self.rule not in COLLISION_RULES:
             raise ValueError(
-                f"collision rule must be one of {', '.join(COLLISION_RULES)}"
+                f"collision rule must be one of {', '.join(COLLISION_RULES)} or custom"
             )
         if self.placement not in PLACEMENTS:
             raise ValueError(f"placement must be one of {', '.join(PLACEMENTS)}")
         if self.substeps < 1:
             raise ValueError("substeps must be >= 1")
+        if not self.specs:
+            raise ValueError("a rule set needs at least one rule")
+
+    @property
+    def specs(self) -> tuple[RuleSpec, ...]:
+        if self.rule == "custom":
+            if not self.rules:
+                raise ValueError("a custom rule set needs at least one rule")
+            return rule_specs(list(self.rules))
+        return collision_rules(self.rule)
+
+    @property
+    def rule_names(self) -> str:
+        return " + ".join(spec.name for spec in self.specs)
 
     @property
     def spacing(self) -> float:
@@ -78,8 +99,13 @@ class BallGasConfig:
         return SquareLattice(self.size, self.spacing)
 
     @property
-    def system(self) -> BallGas:
-        return BallGas(self.lattice, self.step_time, self.rule)
+    def system(self) -> WalkerSystem:
+        return WalkerSystem(
+            self.lattice,
+            tuple(rule_item(spec) for spec in self.specs),
+            self.step_time,
+            max_speed=max(1, self.max_speed),
+        )
 
     @property
     def box(self) -> Box:
@@ -95,8 +121,10 @@ class BallGasConfig:
         return self.steps * self.step_time
 
     def to_dict(self) -> dict[str, Any]:
+        data = asdict(self)
+        data["rules"] = self.rule_names
         return {
-            **asdict(self),
+            **data,
             "spacing": self.spacing,
             "step_time": self.step_time,
             "disk_radius": self.disk_radius,
@@ -148,11 +176,12 @@ class BallResult:
     Maxwell check is informative with few balls) and its exact lattice invariants."""
 
     config: BallGasConfig
-    run: BallGasRun
+    run: GraphHistory
     entropy: np.ndarray
     report: ComparisonReport
     informative: tuple[CheckResult, ...] = ()
     invariants: tuple[dict[str, Any], ...] = ()
+    rules: tuple[dict[str, str], ...] = ()
 
     @property
     def passed(self) -> bool:
@@ -177,23 +206,33 @@ class BallComparison:
         return self.gas.passed and self.balls.passed
 
 
+def initial_state(config: BallGasConfig) -> WalkerGraph:
+    centres, velocities = initial_condition(config, np.random.default_rng(config.seed))
+    return place(config.lattice, centres, velocities, config.radius)
+
+
 def run_ball_gas(
-    config: BallGasConfig | None = None, initial: BallGasState | None = None
+    config: BallGasConfig | None = None, initial: WalkerGraph | None = None
 ) -> BallResult:
     config = BallGasConfig() if config is None else config
     system = config.system
     if initial is None:
-        centres, velocities = initial_condition(
-            config, np.random.default_rng(config.seed)
-        )
-        initial = system.place(centres, velocities, config.radius)
-    run = system.run(initial, config.steps, config.record_every)
+        initial = initial_state(config)
+    run, _ = system.run(
+        initial,
+        config.steps,
+        np.random.default_rng(config.seed + 1),
+        record_every=config.record_every,
+    )
     gas_run = run.to_gas_run()
     entropy = occupancy_entropy(gas_run.trajectory, config.entropy_bins)
+    interacting = system.interacting
     checks = (
         energy_check(gas_run),
         momentum_check(gas_run, "reflecting"),
-        collisions_check(gas_run) if config.balls > 1 else energy_check(gas_run),
+        collisions_check(gas_run)
+        if config.balls > 1 and interacting
+        else energy_check(gas_run),
     )
     informative: tuple[CheckResult, ...] = (
         entropy_check(entropy, config.entropy_bins, config.balls),
@@ -206,15 +245,16 @@ def run_ball_gas(
         entropy,
         ComparisonReport("kinetic theory", "ball gas on the graph", checks),
         informative,
-        tuple(run.checks(config.entropy_bins)),
+        tuple(run.checks(config.entropy_bins, interacting)),
+        tuple(system.descriptions(config.spacing, config.step_time)),
     )
 
 
-def run_reference(config: BallGasConfig, initial: BallGasState) -> GasResult[GasConfig]:
+def run_reference(config: BallGasConfig, initial: WalkerGraph) -> GasResult[GasConfig]:
     """The hard-disk gas started exactly where the balls start, with their velocities, disks
     covering the balls' cells, recorded at the lattice steps."""
     speed_unit = config.spacing / config.step_time
-    velocities = initial.velocities * speed_unit
+    velocities = initial.velocity * speed_unit
     gas_config = GasConfig(
         particles=config.balls,
         radius=config.disk_radius,
@@ -254,13 +294,12 @@ def run_reference(config: BallGasConfig, initial: BallGasState) -> GasResult[Gas
 def run_ball_comparison(config: BallGasConfig | None = None) -> BallComparison:
     """Both systems from the same initial condition, compared at the same recording times."""
     config = BallGasConfig() if config is None else config
-    centres, velocities = initial_condition(config, np.random.default_rng(config.seed))
-    initial = config.system.place(centres, velocities, config.radius)
+    initial = initial_state(config)
     balls = run_ball_gas(config, initial)
     gas = run_reference(config, initial)
     report = compare(
         gas.run.trajectory,
-        balls.run.trajectory(),
+        balls.run.project(),
         reference_label="hard-disk gas",
         candidate_label="ball gas on the graph",
     )

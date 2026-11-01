@@ -1,11 +1,27 @@
 {
   "rule": [
-    {"name": "Reflect", "builtin": "reflect", "description": "a walker heading into a wall turns round"},
-    {"name": "Stream", "builtin": "stream", "description": "free flight: one edge per step along the heading"}
+    {
+      "name": "Reflect",
+      "notation": "{w,s,v}_k, {s,s}_k, {v,v'}|k -> {w,s,v'}",
+      "description": "a ball about to hop into a wall mirrors that velocity component"
+    },
+    {
+      "name": "Turn",
+      "notation": "{w1,s,v1}_k1, {w2,t,v2}_k2, {s,x}_k1, {t,x}_k2, {v1,v2}|o, {v1,v1'}^, {v1',v2'}|o -> {w1,s,v1'}, {w2,t,v2'}",
+      "description": "a head-on pair whose hops meet turns by a quarter turn: the HPP collision"
+    },
+    {
+      "name": "Swap",
+      "notation": "{w1,s,v1}_k1, {w2,t,v2}_k2, {s,x}_k1, {t,x}_k2 -> {w1,s,v2}, {w2,t,v1}",
+      "description": "any other pair whose hops meet swaps velocities"
+    },
+    {
+      "name": "Stream",
+      "notation": "{w,s,v}_k, {s,t}_k -> {w,t,v}",
+      "description": "free flight: one hop per round along the velocity"
+    }
   ],
-  "walker_model": "hyperedge",
-  "collisions": "hpp",
-  "heading": "random",
+  "velocity": "unit",
   "size": 9,
   "walls": "reflecting",
   "walkers": 24,

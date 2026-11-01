@@ -109,8 +109,8 @@ class LatticeGasConfig:
 
     @property
     def channel_fraction(self) -> float:
-        """Occupied fraction of the ``4 size^2`` channels (the lattice gas's density)."""
-        return self.particles / (4 * self.size**2)
+        """Occupied fraction of the ``size^2`` sites (the lattice gas's density)."""
+        return self.particles / self.size**2
 
     def to_dict(self) -> dict[str, Any]:
         return {

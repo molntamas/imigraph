@@ -1,39 +1,44 @@
 <h3>How the ball gas works, and how it is held against the reference</h3>
-<p>Each <em>ball</em> is one walker node (radius 0) or the lattice points within a radius, attached to sites of the room,
-with an integer velocity <code>(v<sub>x</sub>, v<sub>y</sub>)</code> in cells per step. Between contacts a ball moves as the
-single bouncing ball does: a straight line hop by hop, and a specular, elastic bounce when a hop would enter a wall
-self-loop. All balls hop in rounds, one hop each, so a fast ball takes more rounds than a slow one.</p>
-<p>After every round the balls are checked for <em>contact</em>: two balls sharing a site, or two balls that crossed each
-other along an edge. What happens then is the <em>collision rule</em>, chosen above:</p>
+<p>Each <em>ball</em> is the one kind of walker of this project, <code>{w,s,v}</code>: a walker node (radius 0) or the
+lattice points within a radius, attached to a site of the room and to a node of the velocity lattice, an integer
+velocity <code>(v<sub>x</sub>, v<sub>y</sub>)</code> in cells per step. A step moves every ball hop by hop in rounds, so
+a fast ball takes more rounds than a slow one, and the rules of the chosen <em>collision rule set</em> are tried in
+order in every round; the same rules can be edited and run in the playground above. Every rule is a graph rewrite of
+ball hyperedges (the notation is explained with the playground); none of the physics is a formula in the code:</p>
 <table class="kv">
-<thead><tr><th>rule</th><th>what happens at a contact</th><th>conserves</th></tr></thead>
+<thead><tr><th>rule set</th><th>rules, in order</th><th>what happens at a contact</th><th>conserves</th></tr></thead>
 <tbody>
-<tr><th>exchange</th><td>the elastic collision of equal masses. The line of centres before the hop is a lattice direction
-<code>d</code>, an axis or a diagonal. The velocity component along <code>d</code> is exchanged:
-<code>v<sub>a</sub>' = v<sub>a</sub> &minus; &delta; d</code>, <code>v<sub>b</sub>' = v<sub>b</sub> + &delta; d</code> with
-<code>&delta; = (v<sub>a</sub> &minus; v<sub>b</sub>)&middot;d / d&middot;d</code>. Along an axis <code>&delta;</code> is an
-integer and the result is exact. Along a diagonal <code>d&middot;d = 2</code>, and when
-<code>(v<sub>a</sub> &minus; v<sub>b</sub>)&middot;d</code> is odd the exact result is not a lattice velocity: the balls then
-swap their whole velocity vectors instead (the head-on outcome). These <em>fallback</em> collisions are counted and shown;
-they conserve momentum and energy exactly but scatter at the wrong angle. Separating pairs do not collide.</td>
+<tr><th>exchange</th><td>Reflect, Exchange, Swap, Stream</td><td>the elastic collision of equal masses. Exchange moves the
+two velocity nodes to the other corners of the rectangle they span along the lattice direction <code>d</code> of the
+line of centres: the components along <code>d</code> are exchanged, the perpendicular ones kept. Along an axis every
+hit is exact; along a diagonal the corners exist only when <code>(v<sub>a</sub> &minus; v<sub>b</sub>)&middot;d</code> is
+even, otherwise Exchange does not match and Swap takes the pair: the whole velocities are swapped (the head-on
+outcome), momentum and energy exact but the scattering angle wrong. The collisions of each rule are counted and
+shown. Separating pairs are not touched.</td><td>momentum and energy, exactly</td></tr>
+<tr><th>swap</th><td>Reflect, Swap, Stream</td><td>the balls always exchange their whole velocities, whatever the geometry:
+every hit is treated as head-on, each ball continues the other's motion from its own site.</td>
 <td>momentum and energy, exactly</td></tr>
-<tr><th>swap</th><td>the balls always exchange their whole velocity vectors, whatever the geometry: every hit is treated as
-head-on.</td><td>momentum and energy, exactly</td></tr>
-<tr><th>none</th><td>the balls pass through each other: an ideal gas of points. Sites may be shared.</td>
-<td>momentum and energy (nothing happens)</td></tr>
+<tr><th>hpp</th><td>Reflect, Turn, Swap, Stream</td><td>head-on pairs turn by a quarter turn, either sense at random;
+other pairs swap (a deflection, where HPP's point particles would pass through each other). With unit velocities this
+is the HPP lattice gas.</td><td>momentum and energy, exactly</td></tr>
+<tr><th>playground rule set</th><td>the ticked rules of the playground</td><td>whatever they say: edit a collision rule
+there and hold it against the hard disks here.</td><td>what the rules conserve</td></tr>
 </tbody>
 </table>
-<p>Under <em>exchange</em> and <em>swap</em> the hop that produced the contact is undone for both balls, so no two balls ever
-share a site, and the balls continue the step with their new velocities. Later, particles made of several nodes and
-edges may carry their own collision rules; the rule is a configuration of the gas for that reason.</p>
+<p>A contact is found <em>before</em> the hop: two balls whose next hops would meet (land on one site, hit a ball that
+cannot move, or cross one edge) and that approach each other collide where they stand, and leave with their new
+velocities in the same round; a meeting that no rule resolves makes the balls wait, so no two balls ever share a site.
+A ball whose velocity changed continues the step with the remaining hops of the new velocity, never more hops than it
+had. Later, particles made of several nodes and edges may carry their own collision rules; the rule set is a
+configuration of the gas for that reason.</p>
 <h3>Watch a collision</h3>
 <p>Choose the placement <em>two balls head-on</em>: ball 0 starts at the left wall with the largest speed, ball 1 at the
-right wall with speed 1, on the same row. Play step by step and read the caption: free flight, then the contact, where the
-x components are exchanged exactly (ball 0 leaves with speed 1, ball 1 with the larger speed, the total momentum unchanged),
-then the wall bounces, where a component flips and the total momentum changes. The reference on the right does the same
-in continuous space; the two stay in step until a lattice collision happens at a site rather than at the exact contact
-time. <em>Two balls at right angles</em> shows a diagonal hit: with speeds 1 and 1 the exchange is exact, change one speed
-to 2 and the swap fallback is taken and counted.</p>
+right wall with speed 1, on the same row. Play step by step and read the caption: free flight, then the contact, where
+Exchange swaps the x components exactly (ball 0 leaves with speed 1, ball 1 with the larger speed, the total momentum
+unchanged), then the wall bounces by Reflect, where a component flips and the total momentum changes. The reference on
+the right does the same in continuous space; the two stay in step until a lattice collision happens at a site rather
+than at the exact contact time. <em>Two balls at right angles</em> shows a diagonal hit: with speeds 1 and 1 Exchange
+is exact, change one speed to 2 and Swap takes the pair, which the caption and the collision count say.</p>
 <h3>The reference: a hard-disk gas</h3>
 <p>The traditional simulation is the hard-disk gas of the gas report: disks in continuous space moving in straight
 lines, elastic collisions resolved at the exact time of impact (the disks are moved back to contact, the velocity
@@ -43,7 +48,6 @@ each ball's cells, and it is recorded at the lattice steps, so the 2D projection
 and the reference are compared frame by frame: the same energy and momentum bookkeeping, the same occupancy entropy,
 the same speed distribution, and the distribution checks of the comparison framework (mean squared displacement,
 marginals, occupancy). Where the two differ, the lattice is the reason: the balls' velocities are quantised to
-integers, their collisions happen at lattice sites rather than at the exact contact time, and odd diagonal hits take the
-swap fallback. With few balls the entropy and Maxwell checks are informative only (they are statistical statements
-about many particles); with a single ball the room is the only thing to collide with, which is the bouncing ball of
-before.</p>
+integers, their collisions happen at lattice sites rather than at the exact contact time, and odd diagonal hits take
+Swap. With few balls the entropy and Maxwell checks are informative only (they are statistical statements about many
+particles); with a single ball the room is the only thing to collide with: a ball bouncing in a room.</p>

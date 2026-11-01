@@ -71,10 +71,9 @@ def _demo_blob(demo: GraphHistory) -> dict[str, Any]:
         "times": _rounded(demo.times, 4),
         "anchors": demo.anchors.tolist(),
         "paths": None if demo.paths is None else demo.paths.tolist(),
-        "directions": None if demo.directions is None else demo.directions.tolist(),
-        "collisions": None
-        if demo.collisions is None
-        else [sites.tolist() for sites in demo.collisions],
+        "velocities": None if demo.velocities is None else demo.velocities.tolist(),
+        "events": None if demo.events is None else [list(step) for step in demo.events],
+        "radius": demo.radius,
         "space": {
             "coordinates": _rounded(space.coordinates),
             "edges": space.edges().tolist(),
@@ -120,7 +119,9 @@ def describe_rule(
         described = [{"name": type(rule).__name__, **dict.fromkeys(keys, "")}]
     specs = list(getattr(rule, "specs", ()) or [])
     for entry, spec in zip(described, specs, strict=False):
-        entry["pattern"] = svg.rule_pattern(spec.lhs, spec.rhs, spec.type_of)
+        entry["pattern"] = svg.rule_pattern(
+            spec.lhs, spec.rhs, spec.type_of, spec.lhs_ops, spec.rhs_ops
+        )
     return described
 
 
