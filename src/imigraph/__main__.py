@@ -6,6 +6,8 @@ python -m imigraph gas        [config options]           # hard disks vs lattice
 python -m imigraph gas-report [--out output] [--label x] # ... and write a new HTML page
 python -m imigraph playground-report --request-file session.json [--out output] [--label x]
                                                          # the result page of a playground session
+python -m imigraph gui-page   [--out output] [--label x] [--wheel dist/imigraph-*.whl]
+                                                         # the browser GUI (rule editor) as one file
 
 Lattice gas options carry the prefix ``--lattice-`` (``--lattice-size``, ``--lattice-boundary``).
 The graph rule of ``compare`` / ``report`` can be given as JSON: ``--rule '{...}'`` or a list
@@ -87,6 +89,17 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="file with the request (the session JSON the GUI exports)",
     )
+    sub = commands.add_parser(
+        "gui-page",
+        help="the browser GUI (rule editor, playground) as one self-contained HTML file",
+    )
+    add_output_options(sub)
+    sub.add_argument(
+        "--wheel",
+        type=Path,
+        default=None,
+        help="project wheel to embed (default: build it with uv build)",
+    )
     return parser
 
 
@@ -103,6 +116,12 @@ def config_from(
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.command == "gui-page":
+        from imigraph.report.bundle import write_gui_page
+
+        path = write_gui_page(args.out, wheel=args.wheel, label=args.label)
+        print(f"Wrote {path.resolve()}")
+        return 0
     if args.command == "playground-report":
         from imigraph.report.live import playground
         from imigraph.report.playground import (

@@ -1,10 +1,11 @@
-// Browser GUI: loads Pyodide, installs the imigraph wheel from dist/, runs the playground (a rule
-// set edited graphically or as text, a starting universe, a small world) and the comparison
-// experiment, and renders the results with the shared visualisation helpers.
+// Browser GUI: loads Pyodide, installs the imigraph wheel (fetched from dist/, or embedded in the
+// page by `python -m imigraph gui-page`), runs the playground (a rule set edited graphically or
+// as text, a starting universe, a small world) and the comparison experiment, and renders the
+// results with the shared visualisation helpers.
 (function () {
   "use strict";
 
-  const PYODIDE_PACKAGES = ["numpy", "scipy", "micropip"];
+  const PYODIDE_PACKAGES = ["numpy", "scipy"];
   const STORAGE_KEY = "imigraph.playground.v2";
   const byId = function (id) { return document.getElementById(id); };
   const status = function (text) { byId("status").textContent = text; };
@@ -745,15 +746,33 @@
 
   // ---------- Python ----------
 
+  // The wheel is embedded as base64 in <script id="wheel"> by the self-contained page, otherwise
+  // fetched from dist/ (served by docker/serve-web.sh). Unpacked straight into site-packages, so
+  // no micropip and no network access beyond Pyodide's own packages are needed.
+  async function installWheel() {
+    const embedded = byId("wheel");
+    let name, bytes;
+    if (embedded) {
+      name = embedded.dataset.name;
+      const binary = atob(embedded.textContent.replace(/\s+/g, ""));
+      bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    } else {
+      name = (await (await fetch("dist/wheel.txt")).text()).trim();
+      bytes = new Uint8Array(await (await fetch("dist/" + name)).arrayBuffer());
+    }
+    const sitePackages = pyodide.runPython("import site; site.getsitepackages()[0]");
+    pyodide.unpackArchive(bytes, "wheel", { extractDir: sitePackages });
+    return name;
+  }
+
   async function loadPython() {
     status("downloading Pyodide...");
     pyodide = await loadPyodide();
     status("loading numpy and scipy...");
     await pyodide.loadPackage(PYODIDE_PACKAGES);
     status("installing imigraph...");
-    const wheel = (await (await fetch("dist/wheel.txt")).text()).trim();
-    const micropip = pyodide.pyimport("micropip");
-    await micropip.install("dist/" + wheel, { deps: false });
+    const wheel = await installWheel();
     const live = pyodide.pyimport("imigraph.report.live");
     runJson = live.run_json;
     playgroundJson = live.playground_json;
