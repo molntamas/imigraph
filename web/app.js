@@ -152,8 +152,11 @@
     const positions = {};
     const sites = pattern.variables.filter(function (v) { return v.type === "site"; });
     const walkers = pattern.variables.filter(function (v) { return v.type === "walker"; });
-    const step = sites.length ? width / (sites.length + 1) : width / 2;
-    sites.forEach(function (site, k) { positions[site.name] = [(k + 1) * step, 0.72 * height]; });
+    const pad = 0.14 * width;  // sites spread over the panel, walkers above them
+    sites.forEach(function (site, k) {
+      const x = sites.length === 1 ? width / 2 : pad + k * (width - 2 * pad) / (sites.length - 1);
+      positions[site.name] = [x, 0.72 * height];
+    });
     const used = {};
     walkers.forEach(function (walker) {
       let x = width / 2;

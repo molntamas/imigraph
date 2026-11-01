@@ -309,9 +309,14 @@ def pattern_layout(
     sites = [v for v in order if not is_walker(v)]
     walkers = [v for v in order if is_walker(v)]
     positions: dict[str, tuple[float, float]] = {}
-    step = width / (len(sites) + 1) if sites else width / 2
+    pad = 0.14 * width  # sites spread over the panel, walkers above them
     for k, site in enumerate(sites):
-        positions[site] = ((k + 1) * step, 0.72 * height)
+        x = (
+            width / 2
+            if len(sites) == 1
+            else pad + k * (width - 2 * pad) / (len(sites) - 1)
+        )
+        positions[site] = (x, 0.72 * height)
     used: dict[float, int] = {}
     for walker in walkers:
         x = width / 2
@@ -331,8 +336,8 @@ def rule_pattern(
     lhs: tuple[tuple[str, ...], ...],
     rhs: tuple[tuple[str, ...], ...],
     is_walker,
-    panel: int = 112,
-    height: int = 72,
+    panel: int = 150,
+    height: int = 80,
 ) -> str:
     """The two sides of a rule as small graphs: variables as nodes (sites grey, walkers red),
     the edges of each side, an arrow between them."""
