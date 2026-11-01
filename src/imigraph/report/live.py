@@ -13,14 +13,15 @@ from typing import Any
 import numpy as np
 
 from imigraph.experiments import ExperimentConfig, run_experiment
-from imigraph.graph import GraphSimulation, SquareLattice, WalkerGraph, walkers_at_node
-from imigraph.graph.rules import ChainRule, RuleSequence, rule_from_spec, rule_specs
+from imigraph.graph import SquareLattice, WalkerGraph, walkers_at_node
+from imigraph.graph.rules import rule_from_spec
+from imigraph.graph.world import WalkerSystem, rules_from_data
 from imigraph.metrics import StepObserver, occupied_cells
 from imigraph.report.html import (
+    _asset,
     _demo_blob,
     default_demo,
     default_rule_demo,
-    describe_rule,
     fragments,
     page_data,
 )
@@ -39,6 +40,9 @@ PLAYGROUND_DEFAULTS: dict[str, Any] = {
     "placement": "center",
     "sites": [],
     "rule": None,
+    "walker_model": "edge",
+    "collisions": "none",
+    "heading": "random",
 }
 
 
@@ -107,10 +111,13 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
     rules produce (measured against the specs' prediction). Fast enough to re-run on every edit.
 
     ``request`` keys: the universe (``size``, ``walls`` reflecting or periodic, ``walkers``,
-    ``placement`` and ``sites``, see :func:`initial_universe`), the run (``steps``, ``seed``,
-    ``spacing``, ``step_time``) and ``rule``: a :class:`RuleSpec` as JSON, a list of them
-    (applied in order in every step) or ``None`` for RandomHop. An unsupported rule or universe
-    gives ``{"error": message}`` instead of raising, so the editor can show it.
+    ``placement`` and ``sites``, see :func:`initial_universe`), the walker model
+    (``walker_model`` edge or hyperedge, ``heading`` of hyperedge walkers at the start,
+    ``collisions`` none or hpp, see :mod:`imigraph.graph.world`), the run (``steps``,
+    ``seed``, ``spacing``, ``step_time``) and ``rule``: a :class:`RuleSpec` as JSON, a list of
+    them and built-in entries (applied in order in every step) or ``None`` for RandomHop. An
+    unsupported rule or universe gives ``{"error": message}`` instead of raising, so the
+    editor can show it.
     """
     options: dict[str, Any] = {**PLAYGROUND_DEFAULTS, **(request or {})}
     for key, (low, high) in PLAYGROUND_LIMITS.items():
@@ -119,42 +126,55 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
     spacing, step_time = float(options["spacing"]), float(options["step_time"])
     rng = np.random.default_rng(int(options["seed"]))
     try:
-        specs = rule_specs(options["rule"])
-        chain_rules = tuple(ChainRule(spec) for spec in specs)
-        rule: ChainRule | RuleSequence = (
-            chain_rules[0] if len(chain_rules) == 1 else RuleSequence(chain_rules)
-        )
         if options["walls"] not in WALLS:
             raise ValueError(f"walls must be one of {', '.join(WALLS)}")
         lattice = SquareLattice(
             options["size"], spacing, periodic=options["walls"] == "periodic"
         )
-        initial = initial_universe(
-            lattice, str(options["placement"]), options["walkers"], sites, rng
+        system = WalkerSystem(
+            lattice,
+            rules_from_data(options["rule"]),
+            str(options["walker_model"]),
+            str(options["collisions"]),
+            step_time,
         )
+        anchors = initial_universe(
+            lattice, str(options["placement"]), options["walkers"], sites, rng
+        ).anchors
+        initial = system.initial_state(anchors, str(options["heading"]), rng)
     except (ValueError, KeyError, TypeError) as error:
         return {"error": str(error)}
-    simulation = GraphSimulation(lattice, rule, step_time)
     observer = StepObserver()
-    history = simulation.run(
-        initial, options["steps"], rng, 1, observer, record_paths=True
-    )
+    history, blocked = system.run(initial, options["steps"], rng, observer)
     trajectory = history.project()
     total_time = float(trajectory.times[-1])
     displacement = trajectory.positions[-1] - trajectory.positions[0]
     occupied = occupied_cells(trajectory, lattice.size)
-    descriptions = describe_rule(rule, spacing, step_time)
+    descriptions = system.descriptions(spacing, step_time)
+    hyper = system.walker_model == "hyperedge"
     return {
         "error": None,
         "rule": descriptions[-1],
         "rules": descriptions,
-        "specs": [spec.to_dict() for spec in specs],
+        "specs": system.rules_as_data(),
+        "model": {
+            "walker_model": system.walker_model,
+            "collisions": system.collisions,
+            "heading": str(options["heading"]) if hyper else None,
+        },
+        "docs": _asset("collisions.html"),
         "universe": {
             "size": lattice.size,
             "walls": options["walls"],
             "placement": options["placement"],
-            "sites": initial.anchors.tolist(),
-            "walkers": initial.num_walkers,
+            "sites": anchors.tolist(),
+            "directions": history.directions[0].tolist()
+            if history.directions is not None
+            else None,
+            "walkers": int(anchors.shape[0]),
+            "walker_model": system.walker_model,
+            "collisions": system.collisions,
+            "heading": str(options["heading"]) if hyper else None,
             "steps": options["steps"],
             "seed": int(options["seed"]),
             "spacing": spacing,
@@ -167,11 +187,17 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "drift": (displacement.mean(axis=0) / total_time).tolist(),
             "wall_rate": float(np.mean(observer.wall_fraction)),
             "occupied_final": int(occupied[-1]),
+            "collisions": int(sum(len(s) for s in history.collisions))
+            if history.collisions is not None
+            else None,
+            "blocked_rate": blocked / (options["steps"] * max(1, int(anchors.shape[0])))
+            if hyper
+            else None,
         },
         "predicted": {
-            "diffusion": rule.diffusion(spacing, step_time).tolist(),
-            "drift": rule.drift(spacing, step_time).tolist(),
-            "hops": rule.hops,
+            "diffusion": system.diffusion(spacing, step_time).tolist(),
+            "drift": system.drift(spacing, step_time).tolist(),
+            "hops": system.hops,
         },
     }
 

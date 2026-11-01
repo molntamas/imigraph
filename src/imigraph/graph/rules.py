@@ -132,6 +132,8 @@ class RuleSpec:
     weights: tuple[float, float, float, float] = UNIFORM
     self_loops: str = "allow"
     types: dict[str, str] = field(default_factory=dict, compare=False)
+    description: str = field(default="", compare=False)
+    """Free text of the author: what the rule is meant to do (shown with the rule)."""
 
     # ---------- text and JSON forms ----------
 
@@ -178,6 +180,8 @@ class RuleSpec:
             options["self_loops"] = str(data["self_loops"])
         if "types" in data:
             options["types"] = dict(data["types"])
+        if "description" in data:
+            options["description"] = str(data["description"] or "")
         return options
 
     def to_dict(self) -> dict[str, Any]:
@@ -189,6 +193,7 @@ class RuleSpec:
             "weights": list(self.weights),
             "self_loops": self.self_loops,
             "types": {v: self.type_of(v) for v in self.variables},
+            "description": self.description,
         }
 
     @property
@@ -326,6 +331,7 @@ class RuleSpec:
         )
         return {
             "name": self.name,
+            "description": self.description,
             "rewrite": self.notation,
             "matches": f"one labelled edge per chain edge ({k} chain edge{'s' if k != 1 else ''} "
             f"from the anchor of {walker}); {loops}",
@@ -367,19 +373,34 @@ class ChainRule:
     def diffusion(self, spacing: float, step_time: float) -> np.ndarray:
         return self.spec.diffusion(spacing, step_time)
 
-    def apply_with_paths(
+    def apply_with_choices(
         self, state: WalkerGraph, rng: np.random.Generator
-    ) -> tuple[WalkerGraph, np.ndarray]:
-        """The new state and the matched chain of every walker, shape ``(n, k + 1)``."""
+    ) -> tuple[WalkerGraph, np.ndarray, np.ndarray]:
+        """The new state, the matched chain of every walker (shape ``(n, k + 1)``) and the
+        direction labels chosen for its chain edges (shape ``(n, k)``)."""
         _, chain, target = self.spec.chain()
         neighbors = state.space.neighbors
         weights = self.spec.normalized_weights
         allow = self.spec.self_loops == "allow"
         path = [state.anchors]
+        choices = []
         for _ in range(len(chain) - 1):
             choice = _choose_directions(neighbors, path[-1], weights, allow, rng)
+            choices.append(choice)
             path.append(neighbors[path[-1], choice])
-        return WalkerGraph(state.space, path[target]), np.stack(path, axis=1)
+        labels = (
+            np.stack(choices, axis=1)
+            if choices
+            else np.zeros((state.num_walkers, 0), dtype=np.int64)
+        )
+        return WalkerGraph(state.space, path[target]), np.stack(path, axis=1), labels
+
+    def apply_with_paths(
+        self, state: WalkerGraph, rng: np.random.Generator
+    ) -> tuple[WalkerGraph, np.ndarray]:
+        """The new state and the matched chain of every walker, shape ``(n, k + 1)``."""
+        new_state, path, _ = self.apply_with_choices(state, rng)
+        return new_state, path
 
     def apply(self, state: WalkerGraph, rng: np.random.Generator) -> WalkerGraph:
         return self.apply_with_paths(state, rng)[0]
@@ -426,6 +447,7 @@ class RuleSequence:
         names = ", ".join(rule.name for rule in self.rules)
         return {
             "name": self.name,
+            "description": "",
             "rewrite": " ; ".join(spec.notation for spec in self.specs),
             "matches": f"{len(self.rules)} rules applied in order in every step ({names}); "
             "each one matches on the state the previous one produced",

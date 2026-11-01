@@ -1,0 +1,15 @@
+{
+  "rule": [
+    {"name": "Reflect", "builtin": "reflect", "description": "a walker heading into a wall turns round"},
+    {"name": "Stream", "builtin": "stream", "description": "free flight: one edge per step along the heading"}
+  ],
+  "walker_model": "hyperedge",
+  "collisions": "hpp",
+  "heading": "random",
+  "size": 9,
+  "walls": "reflecting",
+  "walkers": 24,
+  "placement": "left",
+  "steps": 60,
+  "seed": 3
+}

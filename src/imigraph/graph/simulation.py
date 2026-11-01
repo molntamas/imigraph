@@ -43,6 +43,11 @@ class GraphHistory:
     """Matched chains per step when recorded: shape ``(T - 1, n, k + 1)``, ``paths[t, w]`` is
     the chain of sites the rule matched for walker ``w`` in the step leading to frame ``t + 1``
     (only for runs recorded at every step)."""
+    directions: np.ndarray | None = None
+    """Heading labels (0..3) of hyperedge walkers at every frame, shape ``(T, n)``; ``None``
+    for edge walkers, which have no heading."""
+    collisions: tuple[np.ndarray, ...] | None = None
+    """Per step, the sites where a Collide rule fired (only with collisions enabled)."""
 
     def __post_init__(self) -> None:
         times = np.asarray(self.times, dtype=float)
@@ -56,6 +61,18 @@ class GraphHistory:
             if paths.shape[:2] != (anchors.shape[0] - 1, anchors.shape[1]):
                 raise ValueError("paths must have shape (T - 1, n, k + 1)")
             object.__setattr__(self, "paths", paths)
+        if self.directions is not None:
+            directions = np.asarray(self.directions, dtype=np.int64)
+            if directions.shape != anchors.shape:
+                raise ValueError("directions must have the shape of anchors")
+            object.__setattr__(self, "directions", directions)
+        if self.collisions is not None:
+            collisions = tuple(
+                np.asarray(sites, dtype=np.int64) for sites in self.collisions
+            )
+            if len(collisions) != anchors.shape[0] - 1:
+                raise ValueError("collisions must list the sites of every step")
+            object.__setattr__(self, "collisions", collisions)
 
     @property
     def num_frames(self) -> int:
@@ -91,6 +108,10 @@ class GraphHistory:
             "times": self.times.tolist(),
             "anchors": self.anchors.tolist(),
             "paths": None if self.paths is None else self.paths.tolist(),
+            "directions": None if self.directions is None else self.directions.tolist(),
+            "collisions": None
+            if self.collisions is None
+            else [sites.tolist() for sites in self.collisions],
             "space": {
                 "coordinates": self.space.coordinates.tolist(),
                 "edges": self.space.edges().tolist(),

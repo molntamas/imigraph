@@ -10,6 +10,8 @@ src/imigraph/
                            data: notation, JSON, validation, predicted drift/diffusion), ChainRule,
                            RuleSequence (a rule set: several chain rules per step)
   graph/gas.py             LatticeGas: HPP rules Collide / Reflect / Stream on hyperedges {w,s,s'}
+  graph/world.py           WalkerSystem: one rule set on either walker model (edge / hyperedge),
+                           collisions none / hpp, built-in Stream and Reflect, exclusion update
   graph/simulation.py      GraphSimulation.run -> GraphHistory (optionally with matched chains);
                            GraphHistory.project -> Trajectory
   compare/checks.py        MsdCheck, MarginalKsCheck, OccupancyCheck (Check protocol)
@@ -157,7 +159,25 @@ predicted drift `hops a (w+x - w-x, w+y - w-y) / tau` and per-component diffusio
 Rules with several walkers (interactions) are hand-written (`LatticeGas`), not yet editable.
 
 A *rule set* is a `RuleSequence`: several chain rules applied one after the other in every
-step, each on the state the previous one produced. Within a step the parts draw their
+step, each on the state the previous one produced.
+
+## Walker models and collisions (`graph/world.py`)
+
+`WalkerSystem` runs a rule set on one of two walker models and with a collision option, so the
+playground covers both the Brownian imitation and the lattice gas. *Edge* walkers `{w,s}` have
+a position only: any number per site, no interaction, chain rules only (the same run as
+`RuleSequence`). *Hyperedge* walkers `{w,s,s'}` have a heading and obey the exclusion principle
+of the lattice gas (one walker per channel). On them a chain rule's last hop sets the heading,
+and the built-in rules Stream and Reflect of `graph/gas.py` are available as entries of the
+rule list (`{"builtin": "stream"}`). Every rule's outcome passes a synchronous exclusion update
+(`resolve_exclusion`): a walker keeps its channel when it does not move, one of several walkers
+wanting a channel wins (at random), a walker whose target is kept by a rejected walker is
+rejected too (a jam), and a walker may enter a channel its occupant leaves in the same step (a
+train). Blocked hops are counted. `collisions="hpp"` applies `LatticeGas.collide` before the
+rules of every step; Reflect + Stream with hpp reproduces `LatticeGas` step for step
+(`tests/test_world.py`). Every `RuleSpec` carries a `description`; the explanation of the
+models and collisions lives in `report/assets/collisions.html` and is shown in the GUI and on
+the saved playground page. Within a step the parts draw their
 directions independently, so far from the walls the drifts add and the per-component diffusions
 add (`tests/test_playground_page.py` checks both on a free run); the matched chains are
 concatenated for the rule diagram. `rule_specs(data)` and `rule_from_spec(data)` accept `None`,

@@ -237,7 +237,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     # Playground: runs on load with the preset rule set (RandomHop ticked).
     wait_playground_done(page, timeout_ms)
     assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
-    assert page.locator("#pg-library tbody tr").count() == 5, "five preset rules"
+    assert page.locator("#pg-library tbody tr").count() == 7, "seven preset rules"
     assert page.locator("#pg-lhs circle.node").count() == 3, "w, s, t on the left"
 
     # Rule list: tick BiasedHop, untick RandomHop -> the rule set is the biased hop.
@@ -252,7 +252,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     page.wait_for_timeout(300)
     for canvas in ("pg-rule-canvas", "pg-demo-canvas", "pg-universe-canvas"):
         painted(page, canvas)
-    assert page.locator("#pg-measured table tbody tr").count() == 6
+    assert page.locator("#pg-measured table tbody tr").count() == 7
     assert page.locator("#pg-rules-table svg.pattern").count() == 1
 
     # Two rules ticked: a sequence, described as one rule plus its parts.
@@ -311,10 +311,57 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     # New rule, delete it again.
     page.click("#pg-new")
     wait_playground_done(page, timeout_ms)
-    assert page.locator("#pg-library tbody tr").count() == 6
+    assert page.locator("#pg-library tbody tr").count() == 8
+    page.fill("#pg-description", "a fresh rule")
+    assert "a fresh rule" in (
+        page.text_content("#pg-library tr.selected td.description") or ""
+    )
     page.click("#pg-delete")
     wait_playground_done(page, timeout_ms)
-    assert page.locator("#pg-library tbody tr").count() == 5
+    assert page.locator("#pg-library tbody tr").count() == 7
+
+    # Walker models and collisions: HPP collisions need hyperedge walkers; with them, Stream
+    # and Reflect (built-in, not editable) plus hpp is the lattice gas: arrows, rings, Collide.
+    page.select_option("select[name=collisions]", "hpp")
+    message = wait_error(page, True, timeout_ms)
+    assert "hyperedge" in message, message
+    page.select_option("select[name=walker_model]", "hyperedge")
+    page.select_option("select[name=placement]", "left")
+    page.fill("input[name=walkers]", "10")
+    page.click("#pg-library tr[data-name=Stream] input.enabled")
+    page.click("#pg-library tr[data-name=Reflect] input.enabled")
+    page.click("#pg-library tr[data-name=BiasedHop] input.enabled")
+    page.click("#pg-apply")
+    wait_error(page, False, timeout_ms)
+    wait_playground_done(page, timeout_ms)
+    assert (
+        page.locator("#pg-rules-table tbody tr").count() == 4
+    )  # Collide, Stream, Reflect, set
+    first = page.text_content("#pg-rules-table tbody tr:first-child th") or ""
+    assert first.startswith("Collide"), first
+    assert "exclusion principle" in (page.text_content("#pg-docs") or "")
+    assert "blocked hops" in (page.text_content("#pg-measured") or "")
+    page.click("#pg-library tr[data-name=Stream] td.notation")
+    assert (
+        page.is_disabled("#pg-add-site")
+        and page.get_attribute("#pg-notation", "readonly") is not None
+    )
+    page.wait_for_timeout(300)
+    painted(page, "pg-demo-canvas")
+    page.screenshot(path=str(out / "gui-lattice-gas.png"), full_page=False)
+    print("  hyperedge walkers with hpp collisions ok")
+    # Back to the Brownian setting for the rest of the check.
+    page.click("#pg-library tr[data-name=Stream] input.enabled")
+    page.click("#pg-library tr[data-name=Reflect] input.enabled")
+    page.click("#pg-library tr[data-name=BiasedHop] input.enabled")
+    page.select_option("select[name=collisions]", "none")
+    page.select_option("select[name=walker_model]", "edge")
+    page.select_option("select[name=placement]", "center")
+    page.fill("input[name=walkers]", "4")
+    page.click("#pg-library tr[data-name=BiasedHop] td.notation")
+    page.click("#pg-apply")
+    wait_playground_done(page, timeout_ms)
+    assert page.text_content("#pg-error") == "", page.text_content("#pg-error")
 
     # Universe: periodic walls, then a walker placed by clicking the corner site (0, 0).
     page.select_option("select[name=walls]", "periodic")
@@ -333,7 +380,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     wait_playground_done(page, timeout_ms)
     assert page.input_value("select[name=placement]") == "sites"
     label = page.text_content("#pg-universe-label") or ""
-    assert label.startswith("5 walkers"), label
+    assert label.startswith("5 edge walkers"), label
     print(f"  universe: {label}")
 
     # Files: the result page, the session and the rule set.

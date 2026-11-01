@@ -32,8 +32,25 @@ def _kv_table(rows: list[tuple[str, str]]) -> str:
 def _measured_table(result: dict[str, Any]) -> str:
     m, p = result["measured"], result["predicted"]
     f = lambda x: f"{float(x):.3f}"
+    model = result.get("model", {"walker_model": "edge", "collisions": "none"})
+    extra: list[tuple[str, str]] = []
+    if model["walker_model"] == "hyperedge":
+        extra = [
+            (
+                "blocked hops (fraction of walkers per step, exclusion)",
+                f(m["blocked_rate"]),
+            ),
+            (
+                f"collisions in the run (collisions: {model['collisions']})",
+                str(m["collisions"]),
+            ),
+        ]
     return _kv_table(
         [
+            (
+                "walker model / collisions",
+                f"{model['walker_model']} / {model['collisions']}",
+            ),
             ("mean |dr|^2 per step (a^2)", f(m["mean_squared_step"])),
             (
                 "diffusion D measured / predicted (x, y)",
@@ -49,6 +66,7 @@ def _measured_table(result: dict[str, Any]) -> str:
             ("hops per step (predicted)", str(p["hops"])),
             ("wall rate (fraction of walkers per step)", f(m["wall_rate"])),
             ("occupied sites at the end", str(m["occupied_final"])),
+            *extra,
         ]
     )
 
@@ -56,10 +74,18 @@ def _measured_table(result: dict[str, Any]) -> str:
 def _universe_table(universe: dict[str, Any]) -> str:
     sites = universe["sites"]
     shown = ", ".join(str(s) for s in sites[:12]) + (" ..." if len(sites) > 12 else "")
+    model = universe.get("walker_model", "edge")
     return _kv_table(
         [
             ("world", f"{universe['size']} x {universe['size']} square lattice"),
             ("walls", str(universe["walls"])),
+            ("walker model", str(model)),
+            ("collisions", str(universe.get("collisions", "none"))),
+            *(
+                [("initial heading", str(universe.get("heading")))]
+                if model == "hyperedge"
+                else []
+            ),
             ("walkers", str(universe["walkers"])),
             ("placement", str(universe["placement"])),
             ("starting sites (node indices)", shown),
@@ -90,6 +116,9 @@ def build_playground_page(
         title=escape(" + ".join(names)),
         num_rules=len(names),
         rules_table=_rules_table(result["rules"]),
+        docs=result.get("docs", ""),
+        walker_model=escape(result.get("model", {}).get("walker_model", "edge")),
+        collisions=escape(result.get("model", {}).get("collisions", "none")),
         universe_table=_universe_table(result["universe"]),
         measured_table=_measured_table(result),
         request_json=escape(json.dumps(request, indent=2)),

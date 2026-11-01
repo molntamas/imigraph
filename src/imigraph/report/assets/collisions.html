@@ -1,0 +1,37 @@
+<h3>Walker models and collisions</h3>
+<p>What happens when two walkers meet depends on what a walker <em>is</em>. The playground offers two walker models
+and two collision behaviours; they are part of the rule configuration, next to the rules themselves.</p>
+<table class="kv">
+<thead><tr><th>walker model</th><th>a walker is</th><th>when two walkers want the same place</th></tr></thead>
+<tbody>
+<tr><th>edge</th><td>the edge <code>{w,s}</code>: a position, nothing else</td>
+<td>nothing happens. Any number of walkers may share a site and they pass through each other; the chain rules move
+every walker independently. This is the model of the Brownian imitation: point particles that do not interact.</td></tr>
+<tr><th>hyperedge</th><td>the hyperedge <code>{w,s,s'}</code>: a position <em>and</em> a heading, the direction label
+<code>k</code> (+x, &minus;x, +y, &minus;y) of the edge from <code>s</code> to <code>s'</code></td>
+<td>the <em>exclusion principle</em>: at most one walker per channel <code>(s, k)</code>, so at most four walkers per
+site and never two with the same heading. A rule that would put two walkers into one channel is <em>blocked</em> for
+the loser: it keeps its channel (ties are drawn at random, a channel that is taken in the current state is never
+entered). The HPP lattice gas never blocks; blocked hops are counted in the measured values.</td></tr>
+</tbody>
+</table>
+<table class="kv">
+<thead><tr><th>collisions</th><th>what it does</th><th>conserves</th></tr></thead>
+<tbody>
+<tr><th>none</th><td>no interaction rule. Edge walkers ignore each other; hyperedge walkers only feel the exclusion.</td>
+<td>the number of walkers</td></tr>
+<tr><th>hpp</th><td>the Collide rule of the HPP lattice gas (Hardy, Pomeau, de Pazzis 1973) runs first in every step:
+<code>{w1,s,a}, {w2,s,b}, {s,c}, {s,d} &rarr; {w1,s,c}, {w2,s,d}, {s,c}, {s,d}</code>. Two walkers on one site heading in
+opposite directions <code>a, b</code> leave along the perpendicular pair <code>c, d</code>, provided those channels are
+empty and are real edges (not wall self-loops); which walker takes <code>c</code> is drawn at random. Needs hyperedge
+walkers, because a collision needs a direction to change. The collision sites are ringed in the step-by-step animation.</td>
+<td>walkers, momentum (<code>a + b = 0 = c + d</code>), energy (every walker keeps the speed <code>a / &tau;</code>),
+the exclusion</td></tr>
+</tbody>
+</table>
+<p>Rules on hyperedge walkers: a <em>chain rule</em> moves the walker along its chain as it does for edge walkers, and
+the label of the last hop becomes the new heading (a walker that stays keeps its heading). The built-in rules
+<em>Stream</em> (move one edge along the heading, keep the label) and <em>Reflect</em> (a walker heading into a wall
+self-loop turns round, the wall takes the momentum) only exist for hyperedge walkers; ticking Stream and Reflect with
+<em>hpp</em> collisions is the HPP lattice gas of the gas report. The drift and diffusion prediction counts the chain
+rules only, and holds at low density; blocked hops lower the measured values when the world is crowded.</p>

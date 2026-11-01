@@ -7,6 +7,9 @@
 <style>
 $css
 table.kv th { width: 55%; }
+#docs table.kv th { width: auto; }
+#docs table.kv { margin-bottom: 12px; }
+span.description { font-weight: normal; font-size: 12px; }
 pre.request { white-space: pre-wrap; font-size: 12px; background: var(--bg); padding: 8px; border-radius: 6px; }
 </style>
 </head>
@@ -23,8 +26,11 @@ rules predict.</p>
 <p>Each rule is an edge rewrite in the notation <code>{w,s}, {s,t} &rarr; {w,t}, {s,t}</code>: a walker edge plus a chain
 of site edges on the left, the walker re-attached to a site of the chain on the right. The pattern drawings show the
 variables as nodes (sites grey, walkers red) and the edges of each side. Direction weights (+x, &minus;x, +y, &minus;y)
-and the self-loop policy of every rule are in the <em>choice</em> and <em>matches</em> columns.</p>
+and the self-loop policy of every rule are in the <em>choice</em> and <em>matches</em> columns. The built-in rules of
+hyperedge walkers (Stream, Reflect) and the Collide rule of the <em>hpp</em> collisions are listed the same way.
+Walker model of this run: <strong>$walker_model</strong>, collisions: <strong>$collisions</strong>.</p>
 $rules_table
+<div id="docs">$docs</div>
 </div>
 
 <h2>2. The starting universe</h2>
@@ -32,7 +38,8 @@ $rules_table
 <div class="row">
 <div>$universe_table</div>
 <div>
-<p class="muted">The world at step 0: space nodes (grey) with their edges, walkers (red) attached to their starting sites.</p>
+<p class="muted">The world at step 0: space nodes (grey) with their edges, walkers (red) attached to their starting sites
+(hyperedge walkers as arrows along their heading).</p>
 <canvas id="universe-canvas" width="400" height="400"></canvas>
 </div>
 </div>
@@ -48,7 +55,7 @@ $rules_table
 <p id="rule-phase" class="muted"></p>
 </div>
 <div>
-<p class="muted">The graph, step by step: all walkers on the small world.</p>
+<p class="muted">The graph, step by step: all walkers on the small world (arrows: headings; rings: collision sites of the step).</p>
 <canvas id="demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="demo-play">Play</button><input id="demo-slider" type="range"><span id="demo-label" class="label"></span></div>
 <label class="muted">playback speed <input id="speed" type="range" min="0.25" max="4" step="0.25" value="1"><span id="speed-label"></span></label>
@@ -86,7 +93,8 @@ $viz_js
   const universe = V.Viewport(byId("universe-canvas"), demo.space.box, 24);
   universe.clear();
   V.drawSpace(universe, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-  V.drawWalkers(universe, demo.space.coordinates, demo.anchors[0], demo.space.spacing);
+  if (demo.directions) V.drawArrows(universe, demo.space.coordinates, demo.anchors[0], demo.directions[0], demo.space.spacing);
+  else V.drawWalkers(universe, demo.space.coordinates, demo.anchors[0], demo.space.spacing);
 
   const rule = V.Viewport(byId("rule-canvas"), demo.space.box, 30);
   const steps = demo.times.length - 1;
@@ -102,7 +110,9 @@ $viz_js
   players.push(V.Player(demo.times.length, function (f) {
     world.clear();
     V.drawSpace(world, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-    V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+    if (demo.collisions && f > 0) V.drawCollisionMarks(world, demo.space.coordinates, demo.collisions[f - 1], demo.space.spacing);
+    if (demo.directions) V.drawArrows(world, demo.space.coordinates, demo.anchors[f], demo.directions[f], demo.space.spacing);
+    else V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
   }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
        labelFor: function (f) { return "step " + f; }, interval: 500 }));
   V.speedControl(byId("speed"), byId("speed-label"), players);

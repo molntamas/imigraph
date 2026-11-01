@@ -15,12 +15,22 @@
   // Rule presets: the JSON form of imigraph.graph.rules.RuleSpec (what "Export" writes), plus
   // whether the rule is part of the running rule set.
   const PRESETS = [
-    { name: "RandomHop", notation: "{w,s}, {s,t} -> {w,t}, {s,t}", weights: UNIFORM, self_loops: "allow", enabled: true },
-    { name: "DoubleHop", notation: "{w,s}, {s,t}, {t,u} -> {w,u}, {s,t}, {t,u}", weights: UNIFORM, self_loops: "allow", enabled: false },
-    { name: "BiasedHop", notation: "{w,s}, {s,t} -> {w,t}, {s,t}", weights: [0.55, 0.15, 0.15, 0.15], self_loops: "allow", enabled: false },
-    { name: "NoStay", notation: "{w,s}, {s,t} -> {w,t}, {s,t}", weights: UNIFORM, self_loops: "forbid", enabled: false },
-    { name: "LookAhead", notation: "{w,s}, {s,t}, {t,u} -> {w,t}, {s,t}, {t,u}", weights: UNIFORM, self_loops: "allow", enabled: false },
+    { name: "RandomHop", notation: "{w,s}, {s,t} -> {w,t}, {s,t}", weights: UNIFORM, self_loops: "allow", enabled: true,
+      description: "one hop per step in a uniformly random direction: the Brownian imitation" },
+    { name: "DoubleHop", notation: "{w,s}, {s,t}, {t,u} -> {w,u}, {s,t}, {t,u}", weights: UNIFORM, self_loops: "allow", enabled: false,
+      description: "two hops per step: twice the diffusion" },
+    { name: "BiasedHop", notation: "{w,s}, {s,t} -> {w,t}, {s,t}", weights: [0.55, 0.15, 0.15, 0.15], self_loops: "allow", enabled: false,
+      description: "one hop per step, +x preferred: a drift" },
+    { name: "NoStay", notation: "{w,s}, {s,t} -> {w,t}, {s,t}", weights: UNIFORM, self_loops: "forbid", enabled: false,
+      description: "like RandomHop, but a walker at the wall must move" },
+    { name: "LookAhead", notation: "{w,s}, {s,t}, {t,u} -> {w,t}, {s,t}, {t,u}", weights: UNIFORM, self_loops: "allow", enabled: false,
+      description: "matches two chain edges but moves along the first only" },
+    { name: "Stream", builtin: "stream", notation: "{w,s,s'}_k, {s',s''}_k -> {w,s',s''}_k", enabled: false,
+      description: "hyperedge walkers: move one edge along the heading and keep it (free flight)" },
+    { name: "Reflect", builtin: "reflect", notation: "{w,s,s} -> {w,s,s'}", enabled: false,
+      description: "hyperedge walkers: a walker heading into a wall turns round" },
   ];
+  const STRING_FIELDS = ["walls", "placement", "walker_model", "collisions", "heading"];
   const SITE_NAMES = ["s", "t", "u", "v", "p", "q", "r"];
 
   let players = [];          // comparison-run players
@@ -42,20 +52,28 @@
   let applyTimer = null;
 
   function freshRule(spec) {
+    const builtin = spec.builtin || null;
+    const preset = builtin ? PRESETS.find(function (p) { return p.builtin === builtin; }) : null;
     return {
       id: nextId++,
-      name: spec.name || "custom",
-      notation: spec.notation || "{w,s}, {s,t} -> {w,t}, {s,t}",
+      name: spec.name || (preset ? preset.name : "custom"),
+      builtin: builtin,
+      notation: builtin ? (preset ? preset.notation : spec.notation || "") : (spec.notation || "{w,s}, {s,t} -> {w,t}, {s,t}"),
       weights: (spec.weights || UNIFORM).map(Number),
       self_loops: spec.self_loops || "allow",
       types: spec.types || {},
+      description: spec.description || "",
       enabled: spec.enabled !== undefined ? Boolean(spec.enabled) : true,
     };
   }
 
   function ruleSpec(rule) {
-    return { name: rule.name, notation: rule.notation, weights: rule.weights, self_loops: rule.self_loops, types: rule.types };
+    if (rule.builtin) return { name: rule.name, builtin: rule.builtin, description: rule.description };
+    return { name: rule.name, notation: rule.notation, weights: rule.weights, self_loops: rule.self_loops, types: rule.types,
+             description: rule.description };
   }
+
+  function isBuiltin(rule) { return Boolean(rule && rule.builtin); }
 
   function selectedRule() {
     return library.find(function (r) { return r.id === selectedId; }) || null;
@@ -239,12 +257,14 @@
   }
 
   function removeEdge(side, index) {
+    if (isBuiltin(selectedRule())) return;
     pattern[side].splice(index, 1);
     picked = null;
     patternChanged();
   }
 
   function clickNode(side, name) {
+    if (isBuiltin(selectedRule())) return;
     if (!picked || picked.side !== side) { picked = { side: side, name: name }; renderPattern(); return; }
     if (picked.name === name) { picked = null; renderPattern(); return; }
     const edges = pattern[side];
@@ -278,7 +298,7 @@
   }
 
   function addNode(type) {
-    if (!pattern) return;
+    if (!pattern || isBuiltin(selectedRule())) return;
     const name = freeName(type);
     pattern.variables.push({ name: name, type: type });
     picked = { side: "lhs", name: name };
@@ -288,7 +308,7 @@
   }
 
   function removePickedNode() {
-    if (!picked) return;
+    if (!picked || isBuiltin(selectedRule())) return;
     const name = picked.name;
     pattern.variables = pattern.variables.filter(function (v) { return v.name !== name; });
     ["lhs", "rhs"].forEach(function (side) {
@@ -299,6 +319,7 @@
   }
 
   function renameNode(oldName) {
+    if (isBuiltin(selectedRule())) return;
     const newName = (window.prompt("New name of " + oldName + " (same name on both sides):", oldName) || "").trim();
     if (!newName || newName === oldName || /[{},\s]/.test(newName)) return;
     if (pattern.variables.some(function (v) { return v.name === newName; })) return;
@@ -316,13 +337,14 @@
     const esc = function (s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;"); };
     const body = byId("pg-library").querySelector("tbody");
     body.innerHTML = library.map(function (rule) {
-      const valid = parseNotation(rule.notation) !== null;
+      const valid = isBuiltin(rule) || parseNotation(rule.notation) !== null;
+      const weights = isBuiltin(rule) ? "" : rule.weights.map(function (w) { return Number(w).toFixed(2); }).join(" ") +
+        (rule.self_loops === "forbid" ? ", no stay" : "");
       return '<tr data-id="' + rule.id + '" data-name="' + esc(rule.name) + '" class="' +
-        (rule.id === selectedId ? "selected" : "") + (valid ? "" : " invalid") + '">' +
+        (rule.id === selectedId ? "selected" : "") + (valid ? "" : " invalid") + (isBuiltin(rule) ? " builtin" : "") + '">' +
         '<td><input type="checkbox" class="enabled" ' + (rule.enabled ? "checked" : "") + ' title="run this rule"></td>' +
         "<td>" + esc(rule.name) + '</td><td class="notation">' + esc(rule.notation) + "</td>" +
-        '<td class="muted">' + rule.weights.map(function (w) { return Number(w).toFixed(2); }).join(" ") +
-        (rule.self_loops === "forbid" ? ", no stay" : "") + "</td></tr>";
+        '<td class="muted">' + weights + '</td><td class="description">' + esc(rule.description || "") + "</td></tr>";
     }).join("");
     Array.prototype.forEach.call(body.querySelectorAll("tr"), function (row) {
       const id = Number(row.getAttribute("data-id"));
@@ -345,11 +367,19 @@
     const rule = selectedRule();
     if (!rule) return;
     byId("pg-name").value = rule.name;
+    byId("pg-description").value = rule.description || "";
     byId("pg-notation").value = rule.notation;
     rule.weights.forEach(function (w, k) { byId("pg-w" + k).value = w; });
     byId("pg-loops").value = rule.self_loops;
+    const builtin = isBuiltin(rule);
+    byId("pg-notation").readOnly = builtin;
+    byId("pg-loops").disabled = builtin;
+    [0, 1, 2, 3].forEach(function (k) { byId("pg-w" + k).disabled = builtin; });
+    ["pg-add-site", "pg-add-walker"].forEach(function (id) { byId(id).disabled = builtin; });
+    document.querySelector(".pattern-editor").classList.toggle("readonly", builtin);
     pattern = patternFromRule(rule);
     renderPattern();
+    if (builtin) byId("pg-editor-hint").textContent = "built-in rule: fixed rewrite on hyperedge walkers; name and description are yours";
     renderLibrary();
     persist();
   }
@@ -360,10 +390,13 @@
     const rule = selectedRule();
     if (!rule) return;
     rule.name = byId("pg-name").value.trim() || "custom";
-    rule.notation = byId("pg-notation").value.trim();
-    rule.weights = [0, 1, 2, 3].map(function (k) { return Number(byId("pg-w" + k).value); });
-    rule.self_loops = byId("pg-loops").value;
-    if (parseNotation(rule.notation)) { pattern = patternFromRule(rule); picked = null; renderPattern(); }
+    rule.description = byId("pg-description").value.trim();
+    if (!isBuiltin(rule)) {
+      rule.notation = byId("pg-notation").value.trim();
+      rule.weights = [0, 1, 2, 3].map(function (k) { return Number(byId("pg-w" + k).value); });
+      rule.self_loops = byId("pg-loops").value;
+      if (parseNotation(rule.notation)) { pattern = patternFromRule(rule); picked = null; renderPattern(); }
+    }
     renderLibrary();
     persist();
   }
@@ -426,9 +459,16 @@
     vp.clear();
     V.drawSpace(vp, geometry.coordinates, geometry.edges, 4);
     const sites = shownSites();
-    V.drawWalkers(vp, geometry.coordinates, sites, 1);
-    byId("pg-universe-label").textContent = sites.length + " walker" + (sites.length === 1 ? "" : "s") + " on a " +
-      size + "×" + size + " world (" + byId("playground").elements.walls.value + " walls)";
+    const form = byId("playground").elements;
+    const hyper = form.walker_model.value === "hyperedge";
+    const directions = hyper && lastResult && lastResult.universe && lastResult.universe.directions &&
+      lastResult.universe.sites.length === sites.length && lastResult.universe.size === size ? lastResult.universe.directions : null;
+    if (directions) V.drawArrows(vp, geometry.coordinates, sites, directions, 1);
+    else V.drawWalkers(vp, geometry.coordinates, sites, 1);
+    byId("pg-universe-label").textContent = sites.length + (hyper ? " hyperedge" : " edge") + " walker" +
+      (sites.length === 1 ? "" : "s") + " on a " + size + "×" + size + " world (" + form.walls.value + " walls, collisions: " +
+      form.collisions.value + ")";
+    form.heading.disabled = !hyper;
     canvas.onclick = function (event) {
       const point = vp.pointOf(event);
       const i = Math.round(point[0]), j = Math.round(point[1]);
@@ -458,7 +498,7 @@
     const form = new FormData(byId("playground"));
     const request = { rule: enabledRules().map(ruleSpec) };
     for (const [key, value] of form.entries()) {
-      request[key] = (key === "walls" || key === "placement") ? value : parseInt(value, 10);
+      request[key] = STRING_FIELDS.indexOf(key) >= 0 ? value : parseInt(value, 10);
     }
     if (request.placement === "sites") request.sites = customSites || [];
     return request;
@@ -497,13 +537,20 @@
     playgroundPlayers.push(V.Player(demo.times.length, function (f) {
       world.clear();
       V.drawSpace(world, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-      V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+      if (demo.collisions && f > 0) V.drawCollisionMarks(world, demo.space.coordinates, demo.collisions[f - 1], demo.space.spacing);
+      if (demo.directions) V.drawArrows(world, demo.space.coordinates, demo.anchors[f], demo.directions[f], demo.space.spacing);
+      else V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
     }, { slider: byId("pg-demo-slider"), button: byId("pg-demo-play"), label: byId("pg-demo-label"),
          labelFor: function (f) { return "step " + f; }, interval: 500 }));
 
     const m = result.measured, p = result.predicted;
+    const modelRows = result.model.walker_model === "hyperedge"
+      ? "<tr><th>blocked hops (fraction of walkers per step, exclusion)</th><td>" + fmt(m.blocked_rate) + "</td></tr>" +
+        "<tr><th>collisions in the run (collisions: " + escapeHtml(result.model.collisions) + ")</th><td>" + m.collisions + "</td></tr>"
+      : "";
     byId("pg-measured").innerHTML =
       '<table class="kv"><tbody>' +
+      "<tr><th>walker model / collisions</th><td>" + escapeHtml(result.model.walker_model) + " / " + escapeHtml(result.model.collisions) + "</td></tr>" +
       "<tr><th>mean |&Delta;r|&sup2; per step (a&sup2;)</th><td>" + fmt(m.mean_squared_step) + "</td></tr>" +
       "<tr><th>diffusion D measured / predicted (x, y)</th><td>" + fmt(m.diffusion) + " / " +
         fmt(p.diffusion[0]) + ", " + fmt(p.diffusion[1]) + "</td></tr>" +
@@ -511,10 +558,11 @@
         fmt(p.drift[0]) + ", " + fmt(p.drift[1]) + ")</td></tr>" +
       "<tr><th>hops per step (predicted)</th><td>" + p.hops + "</td></tr>" +
       "<tr><th>wall rate (fraction of walkers per step)</th><td>" + fmt(m.wall_rate) + "</td></tr>" +
-      "<tr><th>occupied sites at the end</th><td>" + m.occupied_final + "</td></tr>" +
+      "<tr><th>occupied sites at the end</th><td>" + m.occupied_final + "</td></tr>" + modelRows +
       "</tbody></table>" +
       '<p class="muted">Few walkers and walls make the measured values noisy; raise the world size and the walkers to see them converge.</p>';
     byId("pg-rules-table").innerHTML = rulesTable(result.rules);
+    if (result.docs) byId("pg-docs").innerHTML = result.docs;
     V.speedControl(byId("pg-speed"), byId("pg-speed-label"), playgroundPlayers);
     playgroundPlayers.forEach(function (p) { p.play(); });
     drawUniverse();
@@ -527,7 +575,8 @@
     return '<div class="table-scroll"><table><thead><tr><th>rule</th><th>rewrite</th><th>matches</th><th>choice</th>' +
       "<th>invariants</th><th>physics</th><th>pattern</th></tr></thead><tbody>" +
       rules.map(function (r) {
-        return "<tr><th>" + esc(r.name) + "</th><td><code>" + esc(r.rewrite) + "</code></td><td>" + esc(r.matches) +
+        const name = esc(r.name) + (r.description ? '<br><span class="muted description">' + esc(r.description) + "</span>" : "");
+        return "<tr><th>" + name + "</th><td><code>" + esc(r.rewrite) + "</code></td><td>" + esc(r.matches) +
           "</td><td>" + esc(r.choice) + "</td><td>" + esc(r.invariants) + "</td><td>" + esc(r.physics) + '</td><td class="pattern">' +
           (r.pattern || "") + "</td></tr>";
       }).join("") + "</tbody></table></div>";
@@ -635,8 +684,8 @@
       } else if (data.rule) {
         library = [freshRule(Object.assign({ enabled: true }, data.rule))];
       }
-      ["size", "walls", "walkers", "placement", "steps", "seed"].forEach(function (key) {
-        if (data[key] !== undefined && form.elements[key]) form.elements[key].value = data[key];
+      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions", "heading"].forEach(function (key) {
+        if (data[key] !== undefined && data[key] !== null && form.elements[key]) form.elements[key].value = data[key];
       });
       customSites = Array.isArray(data.sites) ? data.sites.map(Number) : null;
       syncPlacement();
@@ -793,7 +842,7 @@
   syncPlacement();
   drawUniverse();
 
-  ["pg-name", "pg-notation", "pg-loops", "pg-w0", "pg-w1", "pg-w2", "pg-w3"].forEach(function (id) {
+  ["pg-name", "pg-description", "pg-notation", "pg-loops", "pg-w0", "pg-w1", "pg-w2", "pg-w3"].forEach(function (id) {
     byId(id).addEventListener("input", editorChanged);
     byId(id).addEventListener("change", editorChanged);
   });
@@ -826,14 +875,20 @@
     if (byId("pg-import").files.length) importFile(byId("pg-import").files[0]);
     byId("pg-import").value = "";
   });
+  // The comparison run imitates Brownian motion with edge walkers: only the chain rules go in.
+  function comparisonRules() {
+    return enabledRules().filter(function (r) { return !isBuiltin(r); }).map(ruleSpec);
+  }
   byId("pg-use").addEventListener("click", function () {
-    const rules = enabledRules().map(ruleSpec);
+    const rules = comparisonRules();
+    if (!rules.length) { status("the comparison run needs at least one chain rule (built-in rules are left out)"); return; }
     byId("run-rule-json").value = JSON.stringify(rules);
     byId("run-rule").value = "custom";
-    status("the comparison run will use the rule set " + rules.map(function (r) { return r.name; }).join(" + "));
+    status("the comparison run will use the rule set " + rules.map(function (r) { return r.name; }).join(" + ") +
+      (rules.length < enabledRules().length ? " (built-in rules left out)" : ""));
   });
   byId("run-rule").addEventListener("change", function () {
-    byId("run-rule-json").value = byId("run-rule").value === "custom" ? JSON.stringify(enabledRules().map(ruleSpec)) : "";
+    byId("run-rule-json").value = byId("run-rule").value === "custom" ? JSON.stringify(comparisonRules()) : "";
   });
   Array.prototype.forEach.call(byId("playground").elements, function (element) {
     if (element.id === "pg-speed") return;
