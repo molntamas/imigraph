@@ -95,8 +95,8 @@ $viz_js
   const universe = V.Viewport(byId("universe-canvas"), demo.space.box, 24);
   universe.clear();
   V.drawSpace(universe, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-  if (demo.directions) V.drawArrows(universe, demo.space.coordinates, demo.anchors[0], demo.directions[0], demo.space.spacing);
-  else V.drawWalkers(universe, demo.space.coordinates, demo.anchors[0], demo.space.spacing);
+  V.drawAgents(universe, demo.anchors[0].map(function (s) { return demo.space.coordinates[s]; }),
+               { radius: 0.3 * demo.space.spacing, fanOut: true, directions: demo.directions ? demo.directions[0] : null });
 
   const rule = V.Viewport(byId("rule-canvas"), demo.space.box, 30);
   const steps = demo.times.length - 1;
@@ -112,9 +112,10 @@ $viz_js
   players.push(V.Player(demo.times.length, function (f) {
     world.clear();
     V.drawSpace(world, demo.space.coordinates, demo.space.edges, 4, 1.5 * demo.space.spacing);
-    if (demo.collisions && f > 0) V.drawCollisionMarks(world, demo.space.coordinates, demo.collisions[f - 1], demo.space.spacing);
-    if (demo.directions) V.drawArrows(world, demo.space.coordinates, demo.anchors[f], demo.directions[f], demo.space.spacing);
-    else V.drawWalkers(world, demo.space.coordinates, demo.anchors[f], demo.space.spacing);
+    const marked = {};
+    if (demo.collisions && f > 0) demo.anchors[f - 1].forEach(function (site, w) { if (demo.collisions[f - 1].indexOf(site) >= 0) marked[w] = true; });
+    V.drawAgents(world, demo.anchors[f].map(function (s) { return demo.space.coordinates[s]; }),
+                 { radius: 0.3 * demo.space.spacing, fanOut: true, marked: marked, directions: demo.directions ? demo.directions[f] : null });
     byId("demo-caption").textContent = data.captions && data.captions.length ? data.captions[f] : "";
   }, { slider: byId("demo-slider"), button: byId("demo-play"), label: byId("demo-label"),
        labelFor: function (f) { return "step " + f; }, interval: 500 }));

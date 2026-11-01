@@ -158,8 +158,8 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
 </form>
 <div class="row">
 <div>
-<p class="muted">The starting universe. Click a site to put a walker there, click it again to take one away. Hyperedge walkers
-are drawn as arrows along their heading.</p>
+<p class="muted">The starting universe. Click a site to put a walker there, click it again to take one away. Every walker keeps
+its colour and number in every view; hyperedge walkers carry an arrow along their heading.</p>
 <canvas id="pg-universe-canvas" width="400" height="400"></canvas>
 <p id="pg-universe-label" class="muted"></p>
 </div>
@@ -170,11 +170,12 @@ are drawn as arrows along their heading.</p>
 <p id="pg-rule-phase" class="muted"></p>
 </div>
 <div>
-<p class="muted">The graph, step by step: all walkers on the small world (arrows: headings of hyperedge walkers; rings: sites
-where a collision fired in this step).</p>
+<p class="muted">The graph, step by step: the walkers on the small world (arrows: headings of hyperedge walkers; a ring marks a
+walker that collided in this step), and below it the 2D projection: the walkers as particles at their sites.</p>
 <canvas id="pg-demo-canvas" width="520" height="520"></canvas>
 <div class="controls"><button id="pg-demo-play">Play</button><input id="pg-demo-slider" type="range"><span id="pg-demo-label" class="label"></span></div>
 <p id="pg-demo-caption" class="muted"></p>
+<canvas id="pg-projection-canvas" width="520" height="520"></canvas>
 <div id="pg-measured"></div>
 </div>
 </div>
@@ -186,19 +187,6 @@ where a collision fired in this step).</p>
 </div>
 <div id="pg-rules-table"></div>
 <div id="pg-docs"></div>
-</div>
-
-<h3>1c. Watch a collision: two hyperedge walkers meet</h3>
-<div class="card">
-<div class="row">
-<div>
-<canvas id="cd-canvas" width="400" height="400"></canvas>
-<div class="controls"><button id="cd-play">Play</button><input id="cd-slider" type="range"><span id="cd-label" class="label"></span></div>
-<p id="cd-caption" class="muted"></p>
-<div class="buttons"><button id="cd-load">Load this world into the playground</button><span id="cd-status" class="muted"></span></div>
-</div>
-<div id="cd-docs"></div>
-</div>
 </div>
 
 <h2>Comparison run: do the random walkers imitate Brownian motion?</h2>
@@ -312,8 +300,8 @@ are tracked for both.</p>
 <p id="bg-error" class="error"></p>
 <div class="row">
 <div>
-<p class="muted">The graph: the room's sites and edges, the balls' walker nodes (red) with the velocity arrow; a ring marks a
-ball that collided in this step.</p>
+<p class="muted">The graph: the room's sites and edges, the balls' walker nodes with the velocity arrow; every ball keeps its
+colour and number in all three views, as the walkers of the playground do; a ring marks a ball that collided in this step.</p>
 <canvas id="bg-graph-canvas" width="400" height="400"></canvas>
 </div>
 <div>

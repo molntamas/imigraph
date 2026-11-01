@@ -56,36 +56,6 @@ PLAYGROUND_DEFAULTS: dict[str, Any] = {
     "overlaps": "parallel",
 }
 
-# A world made to show a collision: two hyperedge walkers on a 4x4 world head straight at each
-# other, two sites apart, with the HPP rules. Step 1 streams them onto the same site, step 2
-# Collide turns them onto the perpendicular pair and Stream moves them apart; the walls then
-# reflect them back and a second collision follows.
-COLLISION_DEMO: dict[str, Any] = {
-    "rule": [
-        {
-            "name": "Reflect",
-            "builtin": "reflect",
-            "description": "a walker heading into a wall turns round",
-        },
-        {
-            "name": "Stream",
-            "builtin": "stream",
-            "description": "every walker moves one edge along its heading",
-        },
-    ],
-    "walker_model": "hyperedge",
-    "collisions": "hpp",
-    "size": 4,
-    "walls": "reflecting",
-    "placement": "sites",
-    "sites": [1, 9],
-    "headings": ["+x", "-x"],
-    "walkers": 2,
-    "steps": 6,
-    "seed": 1,
-    "overlaps": "parallel",
-}
-
 
 def run(
     config: dict[str, Any] | None = None, max_particles: int = 300
@@ -277,20 +247,6 @@ def heading_names(history: Any) -> list[str] | None:
     if history.directions is None:
         return None
     return [DIRECTION_NAMES[int(d)] for d in history.directions[0]]
-
-
-def collision_demo() -> dict[str, Any]:
-    """The predefined collision world (:data:`COLLISION_DEMO`): its request, the playground
-    result with the step captions, and the explanation page fragment."""
-    return {
-        "request": dict(COLLISION_DEMO),
-        "result": playground(COLLISION_DEMO),
-        "docs": _asset("collision-demo.html"),
-    }
-
-
-def collision_demo_json() -> str:
-    return json.dumps(collision_demo(), separators=(",", ":"))
 
 
 NEWTON_LIMITS = {"size": (4, 30), "radius": (0, 4), "steps": (1, 400)}

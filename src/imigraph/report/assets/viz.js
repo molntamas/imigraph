@@ -148,6 +148,74 @@
   // neighbour and is drawn as a small loop pointing out of the lattice in that direction.
   const LOOP_DIRECTIONS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
+  // Agents (walkers, balls, disks) are drawn the same way in every view: a disc in the agent's
+  // own colour with its number, an arrow for its heading (a label 0..3) or velocity, a ring when
+  // it is marked (a collision in this step). Agents on one spot fan out when asked to.
+  const AGENT_COLORS = ["#dc2626", "#2563eb", "#16a34a", "#d97706", "#7c3aed", "#0891b2",
+                        "#be185d", "#4d7c0f", "#b45309", "#1e40af", "#0f766e", "#9f1239"];
+  function agentColor(i) { return AGENT_COLORS[i % AGENT_COLORS.length]; }
+
+  function drawAgents(vp, positions, options) {
+    const o = options || {};
+    const ctx = vp.ctx;
+    const r = o.radius || 0.3;
+    const seen = {};
+    for (let i = 0; i < positions.length; i++) {
+      let x = positions[i][0], y = positions[i][1];
+      const key = x.toFixed(6) + "," + y.toFixed(6);
+      const k = seen[key] || 0;
+      seen[key] = k + 1;
+      if (k > 0 && o.fanOut) {
+        const angle = Math.PI / 4 + k * (2 * Math.PI / 5);
+        x += 0.8 * r * Math.cos(angle);
+        y += 0.8 * r * Math.sin(angle);
+      }
+      const index = o.indices ? o.indices[i] : i;
+      const px = vp.x(x), py = vp.y(y), pr = Math.max(3, r * vp.scale);
+      ctx.globalAlpha = o.alpha === undefined ? 1 : o.alpha;
+      ctx.fillStyle = o.color || agentColor(index);
+      ctx.beginPath();
+      ctx.arc(px, py, pr, 0, 2 * Math.PI);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      if (o.numbers !== false && positions.length <= 40 && pr >= 7) {
+        ctx.fillStyle = "white";
+        ctx.font = "bold " + Math.min(14, pr) + "px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(String(index), px, py);
+      }
+      let d = null;
+      if (o.directions) d = LOOP_DIRECTIONS[o.directions[i]];
+      else if (o.velocities) {
+        const v = o.velocities[i], s = Math.hypot(v[0], v[1]);
+        if (s > 0) d = [v[0] / s, v[1] / s];
+      }
+      if (d) {
+        const len = o.arrowLength || 1.6 * r;
+        const x0 = vp.x(x + r * d[0]), y0 = vp.y(y + r * d[1]);
+        const x1 = vp.x(x + (r + len) * d[0]), y1 = vp.y(y + (r + len) * d[1]);
+        const head = Math.max(4, 0.35 * pr);
+        ctx.strokeStyle = "#374151";
+        ctx.fillStyle = "#374151";
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke();
+        const angle = Math.atan2(y1 - y0, x1 - x0);
+        ctx.beginPath(); ctx.moveTo(x1, y1);
+        ctx.lineTo(x1 - head * Math.cos(angle - 0.5), y1 - head * Math.sin(angle - 0.5));
+        ctx.lineTo(x1 - head * Math.cos(angle + 0.5), y1 - head * Math.sin(angle + 0.5));
+        ctx.closePath(); ctx.fill();
+      }
+      if (o.marked && o.marked[i]) {
+        ctx.strokeStyle = "#f59e0b";
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(px, py, pr * 1.7, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+  }
+
   // Draws the edge from site `from` to site `to` (a loop drawn beside the site when equal).
   function strokeEdge(vp, coords, neighbors, spacing, from, to, color, width) {
     const ctx = vp.ctx;
@@ -265,6 +333,8 @@
     drawCollisionMarks: drawCollisionMarks,
     drawRuleStep: drawRuleStep,
     RULE_PHASES: RULE_PHASES,
+    drawAgents: drawAgents,
+    agentColor: agentColor,
     Player: Player,
     speedControl: speedControl,
   };

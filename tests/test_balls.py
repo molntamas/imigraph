@@ -11,6 +11,7 @@ from imigraph.experiments.balls import (
 )
 from imigraph.graph import SquareLattice
 from imigraph.graph.balls import BallGas, BallGasState
+from imigraph.reference.gas import HardDiskGas
 from imigraph.report.live import balls as live_balls
 
 
@@ -151,3 +152,129 @@ def test_live_balls_entry_point():
     demo = live_balls({"placement": "head-on", "balls": 2, "steps": 12})
     assert demo["error"] is None and demo["summary"]["collisions"] >= 1
     assert "collision rule must be one of" in live_balls({"rule": "magnet"})["error"]
+
+
+def fold(x, length):
+    """Reflect the unfolded coordinate ``x`` into ``[0, length]`` (a billiard on a segment);
+    works for integers and floats."""
+    period = 2 * length
+    x = x % period
+    return x if x <= length else period - x
+
+
+def billiard_step(x, v, length):
+    """Exact bounce of a point with integer velocity on ``[0, length]`` in one step."""
+    unfolded = x + v
+    return fold(unfolded, length), (v if unfolded % (2 * length) <= length else -v)
+
+
+@pytest.mark.parametrize("radius", [0, 1])
+def test_a_single_ball_follows_the_exact_billiard_in_every_case(radius):
+    """Every start cell and every velocity with components up to 3, for several steps: the
+    lattice ball must land where the mirror law puts it, with the mirror law's velocity and
+    an unchanged speed. Catches a wrong direction after a wall or a corner bounce."""
+    size = 7
+    gas = _gas(size)
+    length = size - 1 - 2 * radius  # the centre moves on [radius, size - 1 - radius]
+    speeds = range(-3, 4)
+    for ci in range(radius, size - radius):
+        for cj in range(radius, size - radius):
+            for vx in speeds:
+                for vy in speeds:
+                    state = gas.place([[ci, cj]], [[vx, vy]], radius=radius)
+                    run = gas.run(state, 5)
+                    x, y, ux, uy = ci - radius, cj - radius, vx, vy
+                    for step in range(1, 6):
+                        x, ux = billiard_step(x, ux, length)
+                        y, uy = billiard_step(y, uy, length)
+                        centre = (
+                            run.sites[step, 0, 0] // size,
+                            run.sites[step, 0, 0] % size,
+                        )
+                        # node 0 of a disc is its lowest-left point; the centre is at + radius
+                        # in the first coordinate only for radius 0, so compare via the mean.
+                        cells = np.stack(
+                            [run.sites[step, 0] // size, run.sites[step, 0] % size],
+                            axis=1,
+                        ).mean(axis=0)
+                        assert cells.tolist() == [x + radius, y + radius], (
+                            ci,
+                            cj,
+                            vx,
+                            vy,
+                            step,
+                            cells,
+                            (x + radius, y + radius),
+                            centre,
+                        )
+                        assert run.velocities[step, 0].tolist() == [ux, uy], (
+                            ci,
+                            cj,
+                            vx,
+                            vy,
+                            step,
+                        )
+                    assert np.all(run.bounces >= 0)
+
+
+def test_a_single_disk_in_the_reference_follows_the_exact_billiard():
+    """The hard-disk reference with one disk: the recorded positions equal the continuous
+    mirror law to rounding, the speed never changes, and no frame-to-frame jump exceeds what
+    the velocity allows (a disk cannot vanish and reappear elsewhere)."""
+    config = BallGasConfig(size=10, balls=1, steps=60)
+    space = config.lattice
+    gas = HardDiskGas(
+        config.box, config.disk_radius, config.step_time / config.substeps
+    )
+    lower = np.asarray(config.box.lower) + config.disk_radius
+    upper = np.asarray(config.box.upper) - config.disk_radius
+    length = upper - lower
+    for vx, vy in [(2, 0), (0, -3), (1, 1), (-2, 3), (4, -4), (3, 1)]:
+        start = space.coordinates[space.node_index(4, 5)]
+        velocity = np.array([vx, vy], dtype=float) * config.spacing / config.step_time
+        run = gas.simulate(
+            start[None, :],
+            velocity[None, :],
+            config.steps * config.substeps,
+            config.substeps,
+        )
+        positions = run.trajectory.positions[:, 0, :]
+        for frame, t in enumerate(run.times):
+            expected = [
+                lower[k] + fold(start[k] - lower[k] + velocity[k] * t, length[k])
+                for k in range(2)
+            ]
+            np.testing.assert_allclose(
+                positions[frame],
+                expected,
+                atol=1e-9,
+                err_msg=f"{(vx, vy)} frame {frame}",
+            )
+        speeds = np.linalg.norm(run.velocities[:, 0, :], axis=1)
+        np.testing.assert_allclose(speeds, speeds[0])
+        jumps = np.linalg.norm(np.diff(positions, axis=0), axis=1)
+        assert np.all(jumps <= speeds[0] * config.step_time + 1e-9)
+        assert np.all(positions >= lower - 1e-9) and np.all(positions <= upper + 1e-9)
+
+
+def test_reference_disks_stay_inside_and_keep_their_speeds_between_collisions():
+    """Few disks: inside the box at every substep, speed of every disk unchanged in every
+    interval without a collision, no jump larger than the velocity allows."""
+    config = BallGasConfig(size=10, balls=4, steps=120, max_speed=3, seed=7)
+    comparison = run_ball_comparison(config)
+    run = comparison.gas.run
+    positions = run.trajectory.positions
+    lower = np.asarray(config.box.lower) + config.disk_radius
+    upper = np.asarray(config.box.upper) - config.disk_radius
+    assert np.all(positions >= lower - 1e-9) and np.all(positions <= upper + 1e-9)
+    speeds = np.linalg.norm(run.velocities, axis=2)
+    quiet = run.collisions == 0
+    np.testing.assert_allclose(speeds[1:][quiet], speeds[:-1][quiet])
+    jumps = np.linalg.norm(np.diff(positions, axis=0), axis=2)
+    # No disk can ever be faster than one carrying the whole kinetic energy.
+    fastest = np.sqrt(2 * run.kinetic_energy()[0] / run.mass)
+    assert np.all(jumps <= fastest * config.step_time + 1e-9), np.argwhere(
+        jumps > fastest * config.step_time
+    )[:5]
+    energy = run.kinetic_energy()
+    np.testing.assert_allclose(energy, energy[0])

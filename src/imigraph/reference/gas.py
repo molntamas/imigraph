@@ -1,12 +1,13 @@
 """A hard-disk gas: elastic collisions in a 2D box, kinetic energy conserved exactly.
 
 ``n`` disks of radius ``r`` and mass ``m`` move in straight lines; when two disks overlap while
-approaching each other, the components of their velocities along the line of centres are
-exchanged (elastic collision of equal masses, which conserves momentum and kinetic energy
-exactly), and the overlap is removed. Walls are specular (velocity component flipped) or
-periodic. Positions advance with a fixed time step, so collisions happen at the first step in
-which disks overlap rather than at the exact contact time: this shifts collision times by at most
-one step but never changes the energy.
+approaching each other, they are moved back to the moment of contact (the exact time of impact
+within the step), the components of their velocities along the line of centres are exchanged
+(elastic collision of equal masses, which conserves momentum and kinetic energy exactly), and
+they move on with the new velocities for the rest of the step. Positions therefore stay
+continuous: no disk is ever pushed. Walls are specular (velocity component flipped, position
+mirrored) or periodic. Positions advance with a fixed time step; a collision is detected at the
+end of the step in which the disks first overlap, and resolved at its exact time.
 
 Analytic facts used by the tests:
 
@@ -145,22 +146,33 @@ class HardDiskGas:
             return 0
         i, j = i[close], j[close]
         count = 0
+        diameter = 2 * self.radius
         for a, b in zip(
             i, j, strict=True
         ):  # sequential: a disk may be in several pairs
-            sep = d[a, b]
+            sep = self._separation(x[[a, b]])[
+                0, 1
+            ]  # an earlier pair may have moved them
             dist = float(np.linalg.norm(sep))
-            if dist == 0.0:
+            if dist == 0.0 or dist >= diameter:
                 continue
-            normal = sep / dist
-            relative = float(np.dot(v[a] - v[b], normal))
-            if relative >= 0:  # already separating
+            dv = v[a] - v[b]
+            approach = float(dv @ sep)
+            if approach >= 0:  # already separating
                 continue
+            # Time since contact: the positive root of |sep - dv t|^2 = diameter^2.
+            aa = float(dv @ dv)
+            cc = dist**2 - diameter**2
+            t = min((approach + np.sqrt(approach**2 - aa * cc)) / aa, self.dt)
+            x[a] -= v[a] * t
+            x[b] -= v[b] * t
+            normal = sep - dv * t
+            normal /= np.linalg.norm(normal)
+            relative = float(dv @ normal)
             v[a] -= relative * normal
             v[b] += relative * normal
-            overlap = 2 * self.radius - dist
-            x[a] += 0.5 * overlap * normal
-            x[b] -= 0.5 * overlap * normal
+            x[a] += v[a] * t
+            x[b] += v[b] * t
             count += 1
         return count
 
