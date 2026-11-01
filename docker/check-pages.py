@@ -252,7 +252,7 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     page.wait_for_timeout(300)
     for canvas in ("pg-rule-canvas", "pg-demo-canvas", "pg-universe-canvas"):
         painted(page, canvas)
-    assert page.locator("#pg-measured table tbody tr").count() == 7
+    assert page.locator("#pg-measured table tbody tr").count() == 8
     assert page.locator("#pg-rules-table svg.pattern").count() == 1
 
     # Two rules ticked: a sequence, described as one rule plus its parts.
@@ -319,6 +319,22 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     page.click("#pg-delete")
     wait_playground_done(page, timeout_ms)
     assert page.locator("#pg-library tbody tr").count() == 7
+
+    # Overlapping matches: eight walkers at the centre with the ordered strategy wait for
+    # contested edges; the measured table and the docs say so.
+    page.select_option("select[name=overlaps]", "ordered")
+    page.fill("input[name=walkers]", "8")
+    page.select_option("select[name=placement]", "center")
+    page.click("#pg-apply")
+    wait_playground_done(page, timeout_ms)
+    measured = page.text_content("#pg-measured") or ""
+    assert "/ ordered" in measured and "waiting hops" in measured, measured
+    assert "Overlapping matches" in (page.text_content("#pg-docs") or "")
+    page.select_option("select[name=overlaps]", "parallel")
+    page.fill("input[name=walkers]", "4")
+    page.click("#pg-apply")
+    wait_playground_done(page, timeout_ms)
+    print("  overlap strategies ok")
 
     # Walker models and collisions: HPP collisions need hyperedge walkers; with them, Stream
     # and Reflect (built-in, not editable) plus hpp is the lattice gas: arrows, rings, Collide.

@@ -11,7 +11,8 @@ src/imigraph/
                            RuleSequence (a rule set: several chain rules per step)
   graph/gas.py             LatticeGas: HPP rules Collide / Reflect / Stream on hyperedges {w,s,s'}
   graph/world.py           WalkerSystem: one rule set on either walker model (edge / hyperedge),
-                           collisions none / hpp, built-in Stream and Reflect, exclusion update
+                           collisions none / hpp, built-in Stream and Reflect, exclusion update,
+                           overlap strategies for matches of one rule (parallel/ordered/random/oldest)
   graph/simulation.py      GraphSimulation.run -> GraphHistory (optionally with matched chains);
                            GraphHistory.project -> Trajectory
   compare/checks.py        MsdCheck, MarginalKsCheck, OccupancyCheck (Check protocol)
@@ -177,7 +178,15 @@ train). Blocked hops are counted. `collisions="hpp"` applies `LatticeGas.collide
 rules of every step; Reflect + Stream with hpp reproduces `LatticeGas` step for step
 (`tests/test_world.py`). Every `RuleSpec` carries a `description`; the explanation of the
 models and collisions lives in `report/assets/collisions.html` and is shown in the GUI and on
-the saved playground page. Within a step the parts draw their
+the saved playground page.
+
+*Overlapping matches.* A chain rule's matches (walker edge plus the drawn chain of site edges)
+overlap when they share a site edge. The `overlaps` strategy of `WalkerSystem` decides which
+of them are applied in a step (`select_matches`): `parallel` applies all (site edges are read,
+not consumed, the behaviour of the Brownian imitation), `ordered` / `random` / `oldest` apply a
+greedy non-overlapping set in walker-index order, a fresh random order, or longest-waiting-first
+(the event-age order of the Wolfram models), and the skipped walkers wait. Waiting hops are
+counted and shown; `report/assets/overlaps.html` explains the strategies on the pages. Within a step the parts draw their
 directions independently, so far from the walls the drifts add and the per-component diffusions
 add (`tests/test_playground_page.py` checks both on a free run); the matched chains are
 concatenated for the rule diagram. `rule_specs(data)` and `rule_from_spec(data)` accept `None`,

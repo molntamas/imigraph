@@ -45,13 +45,13 @@ shared consumer.
   computed, what collisions do).
 - **Playground**: `imigraph.report.live.playground(request)` runs a small world from a
   starting universe (`size`, `walls`, `walkers`, `placement`, `sites`), a walker model
-  (`walker_model` edge / hyperedge, `collisions` none / hpp, `heading` of hyperedge walkers;
-  see `graph/world.py`) and a rule set (`RuleSpec` JSON and built-in entries, a list) and
+  (`walker_model` edge / hyperedge, `collisions` none / hpp, `heading` of hyperedge walkers,
+  `overlaps` parallel / ordered / random / oldest for overlapping matches; see `graph/world.py`) and a rule set (`RuleSpec` JSON and built-in entries, a list) and
   returns the demo (matched chains, and `directions` + `collisions` per frame for hyperedge
   walkers), the rule descriptions (Collide first when on, each with an SVG `pattern` and the
-  author's `description`), the `model`, the `docs` (the HTML of `assets/collisions.html`, the
-  explanation of walker models and collisions shown under the rules table on the GUI and the
-  saved page), the resolved `universe`, measured vs predicted drift/diffusion (plus blocked
+  author's `description`), the `model`, the `docs` (the HTML of `assets/collisions.html` and `assets/overlaps.html`, the
+  explanation of walker models, collisions and overlapping matches shown under the rules table
+  on the GUI and the saved page), the resolved `universe`, measured vs predicted drift/diffusion (plus blocked
   hops and collision counts for hyperedge walkers), or `{"error": message}` for an
   unsupported rule or universe. `viz.js` draws hyperedge walkers with `drawArrows` and the
   collision sites with `drawCollisionMarks`. Hyperedge runs also return `captions` (one per

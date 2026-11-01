@@ -60,8 +60,8 @@ WebAssembly). The first load downloads Pyodide, numpy and scipy (about 15 MB) an
 <div class="card">
 <p>A <em>rule</em> is an edge rewrite: a walker edge <code>{w,s}</code> plus a chain of site edges on the left, the walker
 re-attached to a site of the chain on the right. Edit a rule in the drawing or in the text, both show the same rule.
-The rule set runs its ticked rules in order in every step. Choose the <em>walker model</em> and the <em>collisions</em>
-(see the explanation below the results), the <em>starting universe</em> (world size, walls, where the walkers begin,
+The rule set runs its ticked rules in order in every step. Choose the <em>walker model</em>, the <em>collisions</em> and
+the strategy for <em>overlapping matches</em> (see the explanation below the results), the <em>starting universe</em> (world size, walls, where the walkers begin,
 by clicking sites if you like), then <em>Apply</em>: the run is recomputed in Python at once, and the measured
 diffusion, drift and wall rate are compared with what the rules predict. <em>Save result page</em> writes everything
 into one self-contained HTML file.</p>
@@ -122,7 +122,7 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
 <p id="pg-error" class="error"></p>
 <p id="pg-physics"></p>
 
-<h3>1b. Walker model, collisions, starting universe and run</h3>
+<h3>1b. Walker model, collisions, overlapping matches, starting universe and run</h3>
 <form class="params" id="playground" onsubmit="return false;">
   <label>walker model <select name="walker_model">
     <option value="edge">edge {w,s}: position only, no interaction</option>
@@ -131,6 +131,12 @@ between them (a walker keeps a single edge: connecting it elsewhere moves it). C
   <label>collisions <select name="collisions">
     <option value="none">none</option>
     <option value="hpp">hpp: head-on pairs scatter at right angles (hyperedge walkers)</option>
+  </select></label>
+  <label>overlapping matches <select name="overlaps">
+    <option value="parallel">parallel: every match is applied</option>
+    <option value="ordered">ordered: walker 0 first, a match sharing an edge waits</option>
+    <option value="random">random order, a match sharing an edge waits</option>
+    <option value="oldest">oldest first: the walker that waited longest goes first</option>
   </select></label>
   <label>initial heading (hyperedge walkers) <select name="heading">
     <option value="random">random, distinct per site</option>

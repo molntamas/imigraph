@@ -30,7 +30,7 @@
     { name: "Reflect", builtin: "reflect", notation: "{w,s,s} -> {w,s,s'}", enabled: false,
       description: "hyperedge walkers: a walker heading into a wall turns round" },
   ];
-  const STRING_FIELDS = ["walls", "placement", "walker_model", "collisions", "heading"];
+  const STRING_FIELDS = ["walls", "placement", "walker_model", "collisions", "heading", "overlaps"];
   const SITE_NAMES = ["s", "t", "u", "v", "p", "q", "r"];
 
   let players = [];          // comparison-run players
@@ -561,7 +561,9 @@
       : "";
     byId("pg-measured").innerHTML =
       '<table class="kv"><tbody>' +
-      "<tr><th>walker model / collisions</th><td>" + escapeHtml(result.model.walker_model) + " / " + escapeHtml(result.model.collisions) + "</td></tr>" +
+      "<tr><th>walker model / collisions / overlapping matches</th><td>" + escapeHtml(result.model.walker_model) + " / " +
+        escapeHtml(result.model.collisions) + " / " + escapeHtml(result.model.overlaps) + "</td></tr>" +
+      "<tr><th>waiting hops (fraction of walkers per step, overlapping matches)</th><td>" + fmt(m.waiting_rate) + "</td></tr>" +
       "<tr><th>mean |&Delta;r|&sup2; per step (a&sup2;)</th><td>" + fmt(m.mean_squared_step) + "</td></tr>" +
       "<tr><th>diffusion D measured / predicted (x, y)</th><td>" + fmt(m.diffusion) + " / " +
         fmt(p.diffusion[0]) + ", " + fmt(p.diffusion[1]) + "</td></tr>" +
@@ -701,7 +703,7 @@
         if (existing) { existing.enabled = true; } else { library.push(freshRule(Object.assign({ enabled: true }, spec))); }
       });
       const form = byId("playground");
-      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions"].forEach(function (key) {
+      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions", "overlaps"].forEach(function (key) {
         if (request[key] !== undefined && form.elements[key]) form.elements[key].value = request[key];
       });
       customSites = request.sites.slice();
@@ -735,7 +737,7 @@
       } else if (data.rule) {
         library = [freshRule(Object.assign({ enabled: true }, data.rule))];
       }
-      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions", "heading"].forEach(function (key) {
+      ["size", "walls", "walkers", "placement", "steps", "seed", "walker_model", "collisions", "heading", "overlaps"].forEach(function (key) {
         if (data[key] !== undefined && data[key] !== null && form.elements[key]) form.elements[key].value = data[key];
       });
       customSites = Array.isArray(data.sites) ? data.sites.map(Number) : null;

@@ -48,8 +48,12 @@ def _measured_table(result: dict[str, Any]) -> str:
     return _kv_table(
         [
             (
-                "walker model / collisions",
-                f"{model['walker_model']} / {model['collisions']}",
+                "walker model / collisions / overlapping matches",
+                f"{model['walker_model']} / {model['collisions']} / {model.get('overlaps', 'parallel')}",
+            ),
+            (
+                "waiting hops (fraction of walkers per step, overlapping matches)",
+                f(m.get("waiting_rate", 0.0)),
             ),
             ("mean |dr|^2 per step (a^2)", f(m["mean_squared_step"])),
             (
@@ -81,6 +85,7 @@ def _universe_table(universe: dict[str, Any]) -> str:
             ("walls", str(universe["walls"])),
             ("walker model", str(model)),
             ("collisions", str(universe.get("collisions", "none"))),
+            ("overlapping matches", str(universe.get("overlaps", "parallel"))),
             *(
                 [("initial heading", str(universe.get("heading")))]
                 if model == "hyperedge"
@@ -119,6 +124,7 @@ def build_playground_page(
         docs=result.get("docs", ""),
         walker_model=escape(result.get("model", {}).get("walker_model", "edge")),
         collisions=escape(result.get("model", {}).get("collisions", "none")),
+        overlaps=escape(result.get("model", {}).get("overlaps", "parallel")),
         universe_table=_universe_table(result["universe"]),
         measured_table=_measured_table(result),
         request_json=escape(json.dumps(request, indent=2)),
