@@ -21,6 +21,7 @@ rewrites) conserve mass, momentum and energy exactly and make walkers collide.
 docker compose run --rm dev uv run python -m imigraph report       # writes output/brownian_vs_graph_<time>.html
 docker compose run --rm dev uv run python -m imigraph gas-report   # writes output/gas_<time>.html
 docker compose up web                                               # live GUI at http://localhost:8000
+docker compose run --rm dev uv run python -m imigraph gui-page     # the GUI as one file: output/rule_editor_<time>.html
 ```
 
 Every run writes a new timestamped page and keeps the older ones; `output/index.html` lists

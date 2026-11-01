@@ -20,7 +20,15 @@ Two outputs share the same data and drawing code:
 - **GUI** (`web/index.html`, `web/app.js`): loads Pyodide from jsDelivr, installs the project
   wheel from `web/dist/` (built by `docker/serve-web.sh`), calls
   `imigraph.report.live.run_json(config_json)` and renders the returned `data` and `fragments`.
-  Served by `docker compose up web` at http://localhost:8000.
+  Served by `docker compose up web` at http://localhost:8000. The wheel is unpacked into
+  site-packages with `pyodide.unpackArchive` (no micropip).
+- **Self-contained GUI page** (`imigraph.report.bundle`, `python -m imigraph gui-page --label
+  <change>`): `web/index.html` with `report.css`, `viz.js`, `app.js` and the wheel (base64 in
+  `<script id="wheel">`) inlined, written as `output/rule_editor_<time>_<label>.html` and listed
+  in the index. Opens from `file://`; only Pyodide, numpy and scipy come from the CDN. This is the
+  file published to imigraph-reports so the maintainer can edit and test rules without a server.
+  `--wheel` embeds an existing wheel, otherwise `uv build` runs. The verify run checks the newest
+  one with the same GUI script (screenshots in `output/screenshots/rule-editor/`).
 
 `imigraph.report.html.page_data()` and `fragments()` are the shared producers; `viz.js`
 (`Viewport`, `drawParticles`, `drawSpace`, `drawWalkers`, `drawArrows`, `drawCollisionMarks`,

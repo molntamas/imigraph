@@ -10,7 +10,7 @@ turn into pull requests (see `README.md`).
 - Python 3.14, managed with [uv](https://docs.astral.sh/uv/). Core libraries: numpy, scipy, networkx.
 - Tests: pytest. Lint/format: ruff. Type checking: ty. Secret scanning: betterleaks via pre-commit.
 - Source in `src/imigraph/`, tests in `tests/`.
-- Browser GUI: PyScript/Pyodide, static files under `web/` (not created yet).
+- Browser GUI: Pyodide, static files under `web/`; `python -m imigraph gui-page` bundles it into one HTML file.
 
 ## Commands
 

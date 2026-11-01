@@ -9,7 +9,9 @@ sandcastle image ships (playwright is a dev dependency).
 It opens the newest report, gas and playground pages in Chromium, fails on JavaScript errors,
 checks that the animations have frames and draw onto the canvases, exercises the GUI playground
 (rule list, graphical and text editor, the clickable universe, the saved result page) and runs
-the comparison once with small parameters, and saves screenshots to output/screenshots/. With
+the comparison once with small parameters, and saves screenshots to output/screenshots/. The
+newest self-contained GUI page (output/rule_editor_*.html, from ``python -m imigraph gui-page``)
+gets the same GUI check, opened from file:// (screenshots in output/screenshots/rule-editor/). With
 ``--serve`` the script builds the wheel into web/dist and serves web/ itself on a free port
 (the GUI still loads Pyodide from the CDN, so it needs network access).
 """
@@ -432,6 +434,15 @@ def main() -> int:
             if not args.skip_gui:
                 page = browser.new_page(viewport={"width": 1200, "height": 900})
                 failures += check_gui(page, args.gui, args.out, args.timeout)
+            gui_pages = sorted(Path("output").glob("rule_editor_*.html"))
+            if gui_pages and not args.skip_gui:
+                # The self-contained GUI page (python -m imigraph gui-page), opened from file://
+                out = args.out / "rule-editor"
+                out.mkdir(parents=True, exist_ok=True)
+                page = browser.new_page(viewport={"width": 1200, "height": 900})
+                failures += check_gui(
+                    page, gui_pages[-1].resolve().as_uri(), out, args.timeout
+                )
         finally:
             browser.close()
     if failures:
