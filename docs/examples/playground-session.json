@@ -1,0 +1,22 @@
+{
+  "size": 9,
+  "walls": "reflecting",
+  "walkers": 6,
+  "placement": "left",
+  "steps": 60,
+  "seed": 1,
+  "rule": [
+    {
+      "name": "Drift",
+      "notation": "{w,s}, {s,t} -> {w,t}, {s,t}",
+      "weights": [0.55, 0.15, 0.15, 0.15],
+      "self_loops": "allow"
+    },
+    {
+      "name": "NoStay",
+      "notation": "{w,s}, {s,t} -> {w,t}, {s,t}",
+      "weights": [0.25, 0.25, 0.25, 0.25],
+      "self_loops": "forbid"
+    }
+  ]
+}

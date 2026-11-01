@@ -56,8 +56,14 @@ per frame); walker nodes are drawn next to their anchor with their edge (`viz.js
   `(+x, -x, +y, -y)`, `self_loops` `allow` / `forbid`; JSON via `to_dict` / `from_dict`. The
   supported family is the walker-anchored chain (one walker edge, a chain of site edges, the
   walker re-attached to a chain site, site edges unchanged); `chain()` raises a `ValueError`
-  whose message the editor shows. `ChainRule(spec)` runs it; `rule_from_spec(json)` is the
-  entry point used by `ExperimentConfig.rule`, the CLI `--rule` and `report.live.playground`.
+  whose message the editor shows. `ChainRule(spec)` runs it; `rule_from_spec(data)` is the
+  entry point used by `ExperimentConfig.rule`, the CLI `--rule` and `report.live.playground`;
+  `data` may be a list of specs, which gives a `RuleSequence` (the GUI's rule set: the rules
+  run in order in every step; drifts and diffusions add, chains are concatenated for the
+  diagram). `rule_specs(data)` validates the same input.
+- The GUI edits a spec graphically (`web/app.js`, nodes = variables, one edge set per side) and
+  as text; both produce the same JSON. Keep validation in `RuleSpec.chain()`: the editor shows
+  its message, so a new constraint needs a message that says what to change.
 - Prediction before measurement: `spec.drift(a, tau)` and `spec.diffusion(a, tau)`; the
   playground shows measured vs predicted. A new rule family needs the same: derive, then test.
 - Rule diagrams need the matched chains: `GraphSimulation.run(record_paths=True)` for rules

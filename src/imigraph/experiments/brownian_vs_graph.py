@@ -15,7 +15,7 @@ import numpy as np
 
 from imigraph.compare import ComparisonReport, compare
 from imigraph.graph import GraphHistory, GraphSimulation, SquareLattice, walkers_at_node
-from imigraph.graph.rules import RuleSpec, rule_from_spec
+from imigraph.graph.rules import rule_from_spec, rule_specs
 from imigraph.graph.simulation import lattice_hop_diffusion
 from imigraph.metrics import Metrics, StepObserver, compute_metrics
 from imigraph.reference import BrownianBox
@@ -34,10 +34,11 @@ class ExperimentConfig:
     record_every: int = 50
     seed: int = 0
     entropy_bins: int = 8
-    rule: dict[str, Any] | None = None
-    """A :class:`~imigraph.graph.rules.RuleSpec` as JSON; ``None`` runs :class:`RandomHop`.
-    The reference keeps ``D = a^2 / (4 tau)``, so a rule with another diffusion or a drift is
-    *meant* to fail the comparison: that is the experiment."""
+    rule: dict[str, Any] | list[dict[str, Any]] | None = None
+    """A :class:`~imigraph.graph.rules.RuleSpec` as JSON, or a list of them (a
+    :class:`~imigraph.graph.rules.RuleSequence`, applied in order in every step); ``None``
+    runs :class:`RandomHop`. The reference keeps ``D = a^2 / (4 tau)``, so a rule with another
+    diffusion or a drift is *meant* to fail the comparison: that is the experiment."""
 
     def __post_init__(self) -> None:
         if self.steps % self.record_every:
@@ -46,10 +47,7 @@ class ExperimentConfig:
             raise ValueError("at least two particles are needed for the statistics")
         if self.entropy_bins < 1:
             raise ValueError("entropy_bins must be >= 1")
-        if self.rule is not None:
-            RuleSpec.from_dict(
-                self.rule
-            )  # validate early, with the editor's error message
+        rule_specs(self.rule)  # validate early, with the editor's error message
 
     @property
     def diffusion(self) -> float:
@@ -74,7 +72,7 @@ class ExperimentConfig:
 
     @property
     def rule_name(self) -> str:
-        return "RandomHop" if self.rule is None else RuleSpec.from_dict(self.rule).name
+        return " + ".join(spec.name for spec in rule_specs(self.rule))
 
     @property
     def total_time(self) -> float:

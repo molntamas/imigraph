@@ -100,14 +100,30 @@ def default_rule_demo(
     )
 
 
-def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
-    """Human-readable descriptions of the rules of the experiment (see ``RandomHop.describe``)."""
-    rule = result.config.graph_system.rule
-    describe = getattr(rule, "describe", None)
-    if describe is None:
+def describe_rule(
+    rule: Rule, spacing: float = 1.0, step_time: float = 1.0
+) -> list[dict[str, str]]:
+    """Human-readable descriptions of a rule (see ``RandomHop.describe``): one entry per rule
+    of a :class:`~imigraph.graph.rules.RuleSequence` plus the sequence as a whole, each with a
+    ``pattern`` drawing (SVG) when the rule is given as a :class:`RuleSpec`."""
+    describe_all = getattr(rule, "descriptions", None)
+    if describe_all is not None:
+        described = describe_all(spacing, step_time)
+    elif getattr(rule, "describe", None) is not None:
+        described = [rule.describe(spacing, step_time)]
+    else:
         keys = ("rewrite", "matches", "choice", "invariants", "physics")
-        return [{"name": type(rule).__name__, **dict.fromkeys(keys, "")}]
-    return [describe(result.config.spacing, result.config.step_time)]
+        described = [{"name": type(rule).__name__, **dict.fromkeys(keys, "")}]
+    specs = list(getattr(rule, "specs", ()) or [])
+    for entry, spec in zip(described, specs, strict=False):
+        entry["pattern"] = svg.rule_pattern(spec.lhs, spec.rhs, spec.type_of)
+    return described
+
+
+def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
+    """The rules of the experiment, described (see :func:`describe_rule`)."""
+    rule = result.config.graph_system.rule
+    return describe_rule(rule, result.config.spacing, result.config.step_time)
 
 
 def _rules_table(rules: list[dict[str, str]]) -> str:
@@ -116,13 +132,13 @@ def _rules_table(rules: list[dict[str, str]]) -> str:
         rows.append(
             f"<tr><th>{escape(rule['name'])}</th><td><code>{escape(rule['rewrite'])}</code></td>"
             f"<td>{escape(rule['matches'])}</td><td>{escape(rule['choice'])}</td>"
-            f"<td>{escape(rule['invariants'])}</td><td>{escape(rule['physics'])}</td></tr>"
+            f"<td>{escape(rule['invariants'])}</td><td>{escape(rule['physics'])}</td>"
+            f'<td class="pattern">{rule.get("pattern", "")}</td></tr>'
         )
     return (
         '<div class="table-scroll"><table><thead><tr><th>rule</th><th>rewrite</th>'
-        "<th>matches</th><th>choice</th><th>invariants</th><th>physics</th></tr></thead><tbody>"
-        + "".join(rows)
-        + "</tbody></table></div>"
+        "<th>matches</th><th>choice</th><th>invariants</th><th>physics</th><th>pattern</th>"
+        "</tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>"
     )
 
 

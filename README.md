@@ -28,11 +28,23 @@ them, newest first. Open the newest one in a browser: animations of the referenc
 step by step and of the projection, the comparison plots and verdict, and a "questions and
 answers" card about the graph model (what kind of graph, node types, how energy, momentum and
 entropy are computed, what happens when particles collide). The GUI runs the same Python
-package in the browser (Pyodide): a *playground* with a small world (size, walkers, playback
-speed) and an editable rule (notation, direction weights, self-loops; presets; export and import
-as JSON; `python -m imigraph report --rule '<json>'` runs an exported rule), and the comparison
-run with parameters of your choice, including the edited rule. Published pages:
-[imigraph-reports](https://github.com/molntamas/imigraph-reports).
+package in the browser (Pyodide): a *playground* with a rule editor and a small world, and the
+comparison run with parameters of your choice. The rule editor keeps a list of rules (presets
+and your own: add, duplicate, delete, reorder; ticked rules run in order in every step) and
+edits the selected one both as a drawing (click nodes to connect them, click edges to remove
+them, add sites and walkers) and as text (the notation of the report, direction weights,
+self-loops). The *starting universe* is the world size, the walls (reflecting or periodic) and
+where the walkers begin (centre, corner, random, left half, or sites you click). *Apply* runs
+it at the chosen playback speed and compares measured drift, diffusion and wall rate with the
+rules' prediction; *Save result page* downloads one self-contained HTML page of the run, and
+*Export session JSON* the file that reproduces it from the command line:
+
+```bash
+docker compose run --rm dev uv run python -m imigraph playground-report --request-file docs/examples/playground-session.json --label my-rules
+docker compose run --rm dev uv run python -m imigraph report --rule '[{"name":"Hop","notation":"{w,s}, {s,t} -> {w,t}, {s,t}"}]'
+```
+
+Published pages: [imigraph-reports](https://github.com/molntamas/imigraph-reports).
 
 ## Development in Docker (nothing installed on the host)
 
