@@ -1,5 +1,6 @@
 """One graph system for both walker models: edge walkers that never interact and hyperedge
-walkers with an exclusion principle and, optionally, the HPP collision.
+walkers with an exclusion principle and, optionally, the HPP collision, and with a configurable
+strategy for *overlapping matches* of one rule.
 
 A *walker model* says what a walker is:
 
@@ -28,6 +29,23 @@ lattice gas. Every rule's outcome on hyperedge walkers is passed through the exc
 a walker whose target channel is taken in the current state, or wanted by another walker too
 (ties drawn at random), is *blocked* and keeps its channel. The HPP set never blocks, so it
 reproduces :class:`~imigraph.graph.gas.LatticeGas` exactly.
+
+*Overlapping matches.* A chain rule matches once per walker: the walker edge ``{w,s0}`` and the
+chain of site edges ``{s0,s1}, ...`` it drew. Two matches overlap when they share a site edge
+(two walkers on one site drawing the same edge, or chains crossing the same edge). In a
+Wolfram-style rewriting system every match consumes its left-hand side, so overlapping matches
+cannot all be applied in one generation; which ones are applied is the *overlap strategy*:
+
+* ``parallel``: every match is applied; site edges are read, not consumed, so sharing them is
+  harmless (the rule only rewrites the walker edge). All walkers move at once.
+* ``ordered``: matches are applied in a fixed order (walker 0 first); a match that shares a
+  site edge with one already applied in this step is skipped, its walker waits.
+* ``random``: the same, in an order drawn afresh every step.
+* ``oldest``: the same, the walker that has waited longest goes first (ties by index), the
+  event-age ordering of the Wolfram models.
+
+Skipped matches are counted as *waiting* hops. Built-in rules match every walker on its own
+hyperedge, so they never overlap; Collide's pairs are disjoint by the exclusion principle.
 """
 
 from __future__ import annotations
@@ -46,6 +64,14 @@ from imigraph.metrics import StepObserver
 
 WALKER_MODELS = ("edge", "hyperedge")
 COLLISIONS = ("none", "hpp")
+OVERLAPS = ("parallel", "ordered", "random", "oldest")
+OVERLAP_TEXT = {
+    "parallel": "parallel: every match is applied, site edges are shared read-only",
+    "ordered": "ordered: matches applied walker by walker in index order, a match sharing "
+    "a site edge with one already applied this step waits",
+    "random": "random: like ordered, in an order drawn afresh every step",
+    "oldest": "oldest: like ordered, the walker that has waited longest goes first",
+}
 HEADINGS = ("random", *DIRECTION_NAMES)
 BUILTIN_RULES = ("stream", "reflect")
 GAS_RULES = {rule["name"].lower(): rule for rule in RULES}
@@ -202,6 +228,51 @@ def resolve_exclusion(
     return replace(state, sites=new_sites, directions=new_directions), blocked
 
 
+def chain_edge_keys(path: np.ndarray, num_nodes: int) -> np.ndarray:
+    """Undirected keys of the chain edges of every matched path, shape ``(n, k)``: the edge
+    ``{a,b}`` is ``min * N + max``, so two walkers drawing the same edge get the same key."""
+    a, b = path[:, :-1], path[:, 1:]
+    return np.minimum(a, b) * num_nodes + np.maximum(a, b)
+
+
+def select_matches(
+    path: np.ndarray,
+    num_nodes: int,
+    strategy: str,
+    rng: np.random.Generator,
+    ages: np.ndarray | None = None,
+) -> np.ndarray:
+    """The mask of matches applied under ``strategy`` (see the module): greedy in the
+    strategy's order, a match is skipped when a chain edge of it was consumed by a match
+    applied earlier in this step. ``parallel`` applies all of them."""
+    n = path.shape[0]
+    if strategy == "parallel" or path.shape[1] < 2 or n < 2:
+        return np.ones(n, dtype=bool)
+    keys = chain_edge_keys(path, num_nodes)
+    if strategy == "ordered":
+        order = np.arange(n)
+    elif strategy == "random":
+        order = rng.permutation(n)
+    elif strategy == "oldest":
+        waited = np.zeros(n, dtype=np.int64) if ages is None else ages
+        order = np.argsort(-waited, kind="stable")
+    else:
+        raise ValueError(
+            f"overlaps must be one of {', '.join(OVERLAPS)}, not {strategy!r}"
+        )
+    if np.unique(keys).size == keys.size:
+        return np.ones(n, dtype=bool)  # no shared edge at all
+    accepted = np.zeros(n, dtype=bool)
+    consumed: set[int] = set()
+    for w in order:
+        mine = {int(k) for k in keys[w]}
+        if mine & consumed:
+            continue
+        consumed |= mine
+        accepted[w] = True
+    return accepted
+
+
 def initial_headings(
     sites: np.ndarray, heading: str, rng: np.random.Generator
 ) -> np.ndarray:
@@ -240,6 +311,7 @@ class WalkerSystem:
     walker_model: str = "edge"
     collisions: str = "none"
     step_time: float = 1.0
+    overlaps: str = "parallel"
     gas: LatticeGas = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -254,6 +326,10 @@ class WalkerSystem:
             )
         if not self.rules:
             raise ValueError("enable at least one rule")
+        if self.overlaps not in OVERLAPS:
+            raise ValueError(
+                f"overlaps must be one of {', '.join(OVERLAPS)}, not {self.overlaps!r}"
+            )
         if self.step_time <= 0:
             raise ValueError("step_time must be > 0")
         builtins = [r.name for r in self.rules if isinstance(r, BuiltinRule)]
@@ -330,10 +406,12 @@ class WalkerSystem:
             described.append(entry)
         model = (
             f"{WALKER_MODEL_TEXT[self.walker_model]}; {COLLISION_TEXT[self.collisions]}"
+            f"; overlapping matches: {OVERLAP_TEXT[self.overlaps]}"
         )
         if len(described) == 1:
-            # One rule and no collision: the rule is the whole set, described once.
-            if self.walker_model == "hyperedge":
+            # One rule and no collision: the rule is the whole set, described once; the
+            # model is named when it is not the plain Brownian setting.
+            if self.walker_model == "hyperedge" or self.overlaps != "parallel":
                 described[0]["description"] = (
                     f"{described[0]['description']} [{model}]".strip()
                 )
@@ -351,6 +429,12 @@ class WalkerSystem:
             if self.walker_model == "hyperedge"
             else ""
         )
+        if self.overlaps != "parallel":
+            blocked += (
+                f" Overlapping matches ({self.overlaps}): a walker whose chain shares a site "
+                "edge with a match applied earlier in the step waits, which lowers the "
+                "measured values where walkers crowd."
+            )
         described.append(
             {
                 "name": self.name,
@@ -401,19 +485,32 @@ class WalkerSystem:
         return LatticeGasState(self.space, anchors, directions)
 
     def step(
-        self, state: WalkerGraph | LatticeGasState, rng: np.random.Generator
-    ) -> tuple[WalkerGraph | LatticeGasState, np.ndarray, np.ndarray, int]:
+        self,
+        state: WalkerGraph | LatticeGasState,
+        rng: np.random.Generator,
+        ages: np.ndarray | None = None,
+    ) -> tuple[WalkerGraph | LatticeGasState, np.ndarray, np.ndarray, int, np.ndarray]:
         """One step: the new state, the concatenated matched paths ``(n, L)``, the sites where
-        Collide fired and the number of blocked hops."""
+        Collide fired, the number of blocked hops and the mask of walkers that waited because
+        of an overlapping match (``ages`` orders the ``oldest`` strategy)."""
         pieces: list[np.ndarray] = []
         collided = np.zeros(0, dtype=np.int64)
         blocked_total = 0
+        n = state.num_walkers
+        waited = np.zeros(n, dtype=bool)
         if isinstance(state, WalkerGraph):
             for rule in self.rules:
                 assert isinstance(rule, ChainRule)
-                state, path, _ = rule.apply_with_choices(state, rng)
-                _append_path(pieces, path)
-            return state, np.concatenate(pieces, axis=1), collided, 0
+                _, path, _ = rule.apply_with_choices(state, rng)
+                applied = select_matches(
+                    path, self.space.num_nodes, self.overlaps, rng, ages
+                )
+                target = rule.spec.chain()[2]
+                anchors = np.where(applied, path[:, target], state.anchors)
+                state = WalkerGraph(self.space, anchors)
+                waited |= ~applied
+                _append_path(pieces, np.where(applied[:, None], path, path[:, :1]))
+            return state, np.concatenate(pieces, axis=1), collided, 0, waited
         if self.collisions == "hpp":
             state, collided = self.gas.collide(state, rng)
         for rule in self.rules:
@@ -421,9 +518,18 @@ class WalkerSystem:
                 _, path, labels = rule.apply_with_choices(
                     WalkerGraph(self.space, state.sites), rng
                 )
+                applied = select_matches(
+                    path, self.space.num_nodes, self.overlaps, rng, ages
+                )
                 target = rule.spec.chain()[2]
-                sites = path[:, target]
-                directions = labels[:, target - 1] if target > 0 else state.directions
+                sites = np.where(applied, path[:, target], state.sites)
+                directions = (
+                    np.where(applied, labels[:, target - 1], state.directions)
+                    if target > 0
+                    else state.directions
+                )
+                path = np.where(applied[:, None], path, path[:, :1])
+                waited |= ~applied
             else:
                 sites, directions, path = rule.propose(state)
             state, blocked = resolve_exclusion(state, sites, directions, rng)
@@ -434,7 +540,7 @@ class WalkerSystem:
             )
             blocked_total += int(blocked.sum())
             _append_path(pieces, path)
-        return state, np.concatenate(pieces, axis=1), collided, blocked_total
+        return state, np.concatenate(pieces, axis=1), collided, blocked_total, waited
 
     def run(
         self,
@@ -442,9 +548,10 @@ class WalkerSystem:
         steps: int,
         rng: np.random.Generator,
         observer: StepObserver | None = None,
-    ) -> tuple[GraphHistory, int]:
+    ) -> tuple[GraphHistory, int, int]:
         """Every state of ``steps`` steps with the matched paths (and headings, collision sites
-        for hyperedge walkers); returns the history and the total number of blocked hops."""
+        for hyperedge walkers); returns the history, the total number of blocked hops and the
+        total number of waiting hops (overlapping matches skipped)."""
         if steps < 0:
             raise ValueError("steps must be >= 0")
         coordinates = self.space.coordinates
@@ -454,11 +561,15 @@ class WalkerSystem:
             directions.append(initial.directions)
         state = initial
         blocked_total = 0
+        waited_total = 0
+        ages = np.zeros(initial.num_walkers, dtype=np.int64)
         for step in range(1, steps + 1):
             previous = anchors_of(state)
-            state, path, collided, blocked = self.step(state, rng)
+            state, path, collided, blocked, waited = self.step(state, rng, ages)
             current = anchors_of(state)
             blocked_total += blocked
+            waited_total += int(waited.sum())
+            ages = np.where(waited, ages + 1, 0)
             frames.append(current)
             paths.append(path)
             collisions.append(collided)
@@ -482,7 +593,7 @@ class WalkerSystem:
             np.stack(directions) if directions else None,
             tuple(collisions) if self.walker_model == "hyperedge" else None,
         )
-        return history, blocked_total
+        return history, blocked_total, waited_total
 
 
 def momentum(history: GraphHistory) -> np.ndarray | None:

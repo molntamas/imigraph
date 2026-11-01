@@ -49,6 +49,7 @@ PLAYGROUND_DEFAULTS: dict[str, Any] = {
     "collisions": "none",
     "heading": "random",
     "headings": None,
+    "overlaps": "parallel",
 }
 
 # A world made to show a collision: two hyperedge walkers on a 4x4 world head straight at each
@@ -78,6 +79,7 @@ COLLISION_DEMO: dict[str, Any] = {
     "walkers": 2,
     "steps": 6,
     "seed": 1,
+    "overlaps": "parallel",
 }
 
 
@@ -172,6 +174,7 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             str(options["walker_model"]),
             str(options["collisions"]),
             step_time,
+            str(options["overlaps"]),
         )
         anchors = initial_universe(
             lattice, str(options["placement"]), options["walkers"], sites, rng
@@ -196,7 +199,7 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
     except (ValueError, KeyError, TypeError) as error:
         return {"error": str(error)}
     observer = StepObserver()
-    history, blocked = system.run(initial, options["steps"], rng, observer)
+    history, blocked, waited = system.run(initial, options["steps"], rng, observer)
     trajectory = history.project()
     total_time = float(trajectory.times[-1])
     displacement = trajectory.positions[-1] - trajectory.positions[0]
@@ -216,8 +219,9 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "walker_model": system.walker_model,
             "collisions": system.collisions,
             "heading": str(options["heading"]) if hyper else None,
+            "overlaps": system.overlaps,
         },
-        "docs": _asset("collisions.html"),
+        "docs": _asset("collisions.html") + _asset("overlaps.html"),
         "universe": {
             "size": lattice.size,
             "walls": options["walls"],
@@ -231,6 +235,7 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "collisions": system.collisions,
             "heading": str(options["heading"]) if hyper else None,
             "headings": heading_names(history) if hyper else None,
+            "overlaps": system.overlaps,
             "steps": options["steps"],
             "seed": int(options["seed"]),
             "spacing": spacing,
@@ -249,6 +254,7 @@ def playground(request: dict[str, Any] | None = None) -> dict[str, Any]:
             "blocked_rate": blocked / (options["steps"] * max(1, int(anchors.shape[0])))
             if hyper
             else None,
+            "waiting_rate": waited / (options["steps"] * max(1, int(anchors.shape[0]))),
             "momentum_start": None if total is None else total[0].tolist(),
             "momentum_end": None if total is None else total[-1].tolist(),
             "momentum_changes": None

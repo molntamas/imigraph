@@ -91,6 +91,11 @@ and unites the two walker models under one rule set:
 - `rules_from_data(list)` builds the rule tuple from the request's `rule` list;
   `system.descriptions()` lists Collide (if on), every rule and the set, each with a pattern.
 
+- `overlaps` (`parallel`, `ordered`, `random`, `oldest`): the strategy for overlapping matches
+  of one chain rule (matches sharing a site edge; `select_matches`). `parallel` applies all,
+  the others apply a greedy non-overlapping set in index / random / longest-waiting order and
+  count the skipped matches as *waiting* hops. Explained in `report/assets/overlaps.html`.
+
 A new collision type: add it to `COLLISIONS`, apply it in `WalkerSystem.step` before the
 rules, describe it in `COLLISION_TEXT` and `descriptions()`, document it in
 `report/assets/collisions.html` (shown in the GUI and on the saved page), and test that the

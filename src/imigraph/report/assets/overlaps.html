@@ -1,0 +1,28 @@
+<h3>Overlapping matches</h3>
+<p>A chain rule matches once per walker: the walker edge <code>{w,s<sub>0</sub>}</code> plus the chain of site edges
+<code>{s<sub>0</sub>,s<sub>1</sub>}, &hellip;</code> that the walker drew with the direction weights. Two matches
+<em>overlap</em> when they share a site edge: two walkers on one site that drew the same edge, or two chains that cross the
+same edge (a wall self-loop <code>{s,s}</code> is an edge too). In a Wolfram-style rewriting system a match consumes its
+whole left-hand side, so overlapping matches cannot all be applied in one generation, and the system needs a rule for
+which ones are. Here that rule is the <em>overlap strategy</em>, part of the rule configuration:</p>
+<table class="kv">
+<thead><tr><th>strategy</th><th>what happens in a step</th><th>effect</th></tr></thead>
+<tbody>
+<tr><th>parallel</th><td>every match is applied. The rule rewrites only the walker edge, the site edges are read and left in
+place, so sharing them is harmless.</td><td>all walkers move at once; walkers never wait. The prediction of drift and
+diffusion assumes this.</td></tr>
+<tr><th>ordered</th><td>matches are applied one after the other in walker order (walker 0 first). A match whose chain shares
+a site edge with a match already applied in this step is skipped: its walker <em>waits</em> and is not rewritten.</td>
+<td>low walker indices get priority on contested edges; where walkers crowd, fewer hops per step than predicted.</td></tr>
+<tr><th>random</th><td>like ordered, in an order drawn afresh every step.</td><td>fair on average; the same throttling where
+walkers crowd.</td></tr>
+<tr><th>oldest</th><td>like ordered, but the walker that has waited longest goes first (ties by index): the event-age
+ordering of the Wolfram models, in which the least recently updated part of the graph is rewritten first.</td>
+<td>no walker starves: two walkers fighting over one edge alternate.</td></tr>
+</tbody>
+</table>
+<p>Waiting hops are counted in the measured values, and a waiting walker's match is drawn as a stay in the rule animation.
+The built-in rules match every walker on its own hyperedge and never overlap; the pairs of Collide are disjoint by the
+exclusion principle. The overlap strategy decides which matches are <em>applied</em> (an input conflict); the exclusion
+update of hyperedge walkers decides which results <em>fit</em> (an output conflict); the two are independent. The
+comparison run of section 2 always uses the parallel strategy.</p>

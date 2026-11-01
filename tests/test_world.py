@@ -46,11 +46,12 @@ def test_edge_walkers_reproduce_the_rule_sequence():
     specs = (RANDOM_HOP, RuleSpec.parse("{w,s}, {s,t}, {t,u} -> {w,u}, {s,t}, {t,u}"))
     system = WalkerSystem(lattice, tuple(ChainRule(s) for s in specs))
     anchors = np.full(5, lattice.center_node)
-    history, blocked = system.run(
+    history, blocked, waited = system.run(
         system.initial_state(anchors, "random", np.random.default_rng(3)),
         30,
         np.random.default_rng(1),
     )
+    assert waited == 0
     reference = RuleSequence(tuple(ChainRule(s) for s in specs))
     state = WalkerGraph(lattice, anchors)
     rng = np.random.default_rng(1)
@@ -128,7 +129,7 @@ def test_hyperedge_chain_rules_keep_the_exclusion_at_high_density(collisions):
     anchors = np.repeat(np.arange(16), 3)  # 48 walkers on 16 sites: crowded
     initial = system.initial_state(anchors, "random", rng)
     assert isinstance(initial, LatticeGasState)
-    history, blocked = system.run(initial, 40, rng)
+    history, blocked, _waited = system.run(initial, 40, rng)
     assert blocked > 0
     assert history.directions is not None and history.directions.shape == (41, 48)
     for frame in range(41):
@@ -149,7 +150,9 @@ def test_the_heading_follows_the_last_hop():
         np.array([lattice.center_node]), "-y", np.random.default_rng(0)
     )
     assert isinstance(state, LatticeGasState) and state.directions.tolist() == [3]
-    new, _path, _collided, blocked = system.step(state, np.random.default_rng(0))
+    new, _path, _collided, blocked, _waited = system.step(
+        state, np.random.default_rng(0)
+    )
     assert isinstance(new, LatticeGasState)
     assert new.directions.tolist() == [0] and blocked == 0
     assert new.sites[0] == lattice.neighbors[lattice.center_node, 0]
@@ -166,7 +169,7 @@ def test_stream_reflect_with_hpp_collisions_is_the_lattice_gas():
         "hpp",
         0.5,
     )
-    history, blocked = system.run(initial, 60, np.random.default_rng(7))
+    history, blocked, _waited = system.run(initial, 60, np.random.default_rng(7))
     assert blocked == 0
     assert history.directions is not None and history.collisions is not None
     state = initial
@@ -196,6 +199,7 @@ def test_playground_runs_every_model_and_documents_collisions():
         "walker_model": "edge",
         "collisions": "none",
         "heading": None,
+        "overlaps": "parallel",
     }
     assert edge["demo"]["directions"] is None and edge["measured"]["collisions"] is None
     assert "exclusion principle" in edge["docs"] and "<h3>" in edge["docs"]
@@ -253,7 +257,9 @@ def test_momentum_and_energy_are_conserved_by_hpp_collisions():
     system = WalkerSystem(lattice, (BuiltinRule("stream"),), "hyperedge", "hpp")
     rng = np.random.default_rng(11)
     anchors = rng.choice(lattice.num_nodes, size=30, replace=False)
-    history, blocked = system.run(system.initial_state(anchors, "random", rng), 80, rng)
+    history, blocked, _waited = system.run(
+        system.initial_state(anchors, "random", rng), 80, rng
+    )
     assert blocked == 0 and history.collisions is not None
     assert sum(len(c) for c in history.collisions) > 0
     total = momentum(history)
@@ -314,3 +320,100 @@ def test_explicit_headings_are_validated():
     )
     ok = playground({**base, "headings": ["+y", "-y"]})
     assert ok["error"] is None and ok["universe"]["headings"] == ["+y", "-y"]
+
+
+RIGHT = RuleSpec.parse(RANDOM_HOP.notation, name="Right", weights=(1, 0, 0, 0))
+
+
+def _two_walkers_one_edge(strategy, steps=6):
+    """Two walkers on one site of a periodic row, both always drawing the +x edge: their
+    matches overlap in every step."""
+    lattice = SquareLattice(5, periodic=True)
+    system = WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps=strategy)
+    start = np.array([lattice.center_node, lattice.center_node])
+    rng = np.random.default_rng(0)
+    history, _blocked, waited = system.run(
+        system.initial_state(start, "random", rng), steps, rng
+    )
+    return history, waited
+
+
+def test_parallel_applies_overlapping_matches_and_ordered_skips_them():
+    history, waited = _two_walkers_one_edge("parallel")
+    assert waited == 0
+    assert np.all(
+        history.anchors[1:, 0] == history.anchors[1:, 1]
+    )  # both moved together
+    history, waited = _two_walkers_one_edge("ordered")
+    # Walker 0 always goes first; walker 1 waits until the shared edge is free again, i.e.
+    # once walker 0 has moved on it is a different edge and both move: 1 wait in total.
+    assert waited == 1
+    assert history.anchors[1, 0] != history.anchors[0, 0]
+    assert history.anchors[1, 1] == history.anchors[0, 1]
+    assert history.paths is not None
+    assert (
+        history.paths[0, 1].tolist() == [history.anchors[0, 1]] * 2
+    )  # a waiting match
+
+
+def test_oldest_alternates_and_random_picks_one_per_shared_edge():
+    lattice = SquareLattice(3)
+    # Reflecting 3x3 world: two walkers that always draw +x pile up at the right wall, where
+    # the shared self-loop edge is the overlap in every step.
+    system = WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps="oldest")
+    start = np.array([lattice.node_index(2, 1), lattice.node_index(2, 1)])
+    rng = np.random.default_rng(0)
+    _history, _blocked, waited = system.run(
+        system.initial_state(start, "random", rng), 4, rng
+    )
+    assert waited == 4  # one of the two waits in every step
+    # Step by step: the walker that waited last time goes first, so they alternate.
+    state = system.initial_state(start, "random", rng)
+    ages = np.zeros(2, dtype=np.int64)
+    waiting = []
+    for _ in range(4):
+        state, _path, _collided, _blocked, waited_mask = system.step(state, rng, ages)
+        waiting.append(int(np.flatnonzero(waited_mask)[0]))
+        ages = np.where(waited_mask, ages + 1, 0)
+    assert waiting == [1, 0, 1, 0]
+    system = WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps="random")
+    _history, _blocked, waited = system.run(
+        system.initial_state(start, "random", rng), 20, rng
+    )
+    assert waited == 20
+    with pytest.raises(ValueError, match="overlaps must be one of"):
+        WalkerSystem(lattice, (ChainRule(RIGHT),), overlaps="first")
+
+
+def test_overlap_strategies_keep_the_exclusion_on_hyperedge_walkers():
+    lattice = SquareLattice(4)
+    for strategy in ("ordered", "random", "oldest"):
+        system = WalkerSystem(
+            lattice, (ChainRule(RANDOM_HOP),), "hyperedge", "hpp", overlaps=strategy
+        )
+        rng = np.random.default_rng(2)
+        anchors = np.repeat(np.arange(16), 2)
+        history, _blocked, waited = system.run(
+            system.initial_state(anchors, "random", rng), 30, rng
+        )
+        assert waited > 0 and history.directions is not None
+        for frame in range(31):
+            assert _exclusion_holds(
+                LatticeGasState(
+                    lattice, history.anchors[frame], history.directions[frame]
+                )
+            )
+
+
+def test_playground_reports_the_overlap_strategy():
+    result = playground(
+        {"overlaps": "ordered", "walkers": 8, "placement": "center", "steps": 20}
+    )
+    assert result["error"] is None
+    assert result["model"]["overlaps"] == "ordered"
+    assert result["universe"]["overlaps"] == "ordered"
+    assert result["measured"]["waiting_rate"] > 0
+    assert "ordered" in result["rule"]["description"]
+    assert "Overlapping matches" in result["docs"]
+    assert "overlaps must be one of" in playground({"overlaps": "last"})["error"]
+    assert playground({})["measured"]["waiting_rate"] == 0
