@@ -381,6 +381,32 @@ def check_gui(page: Page, url: str, out: Path, timeout_ms: int) -> list[str]:
     assert "head-on" in (page.text_content("#cd-docs") or "")
     painted(page, "cd-canvas")
     page.screenshot(path=str(out / "gui-collision-demo.png"), full_page=False)
+    # World 2: the bouncing ball ran on load; every conservation check passes, the canvas is
+    # painted, and a changed velocity reruns it.
+    page.wait_for_function(
+        "/^done/.test(document.getElementById('nw-status').textContent)",
+        timeout=timeout_ms,
+    )
+    assert page.locator("#nw-checks tbody tr").count() == 6
+    assert page.locator("#nw-checks .badge.fail").count() == 0
+    assert "specular" in (page.text_content("#nw-docs") or "")
+    assert page.locator("#nw-entropy-chart svg").count() == 1
+    page.wait_for_timeout(300)
+    painted(page, "nw-canvas")
+    page.fill("#newton input[name=vx]", "1")
+    page.dispatch_event("#newton input[name=vx]", "change")
+    page.wait_for_function(
+        "/^running|^done/.test(document.getElementById('nw-status').textContent)",
+        timeout=timeout_ms,
+    )
+    page.wait_for_function(
+        "/^done/.test(document.getElementById('nw-status').textContent)",
+        timeout=timeout_ms,
+    )
+    assert "(1, 1)" in (page.text_content("#nw-summary") or "")
+    page.screenshot(path=str(out / "gui-newton.png"), full_page=False)
+    print("  bouncing ball ok")
+
     page.click("#cd-load")
     wait_playground_done(page, timeout_ms)
     assert page.input_value("select[name=collisions]") == "hpp"

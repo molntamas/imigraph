@@ -102,6 +102,15 @@ rules, describe it in `COLLISION_TEXT` and `descriptions()`, document it in
 exclusion still holds every step. A new walker model needs its own state class, an
 `initial_state`, and a decision for every existing rule kind.
 
+## Newtonian motion: the bouncing ball (`graph/newton.py`)
+
+`NewtonWorld(space).place(centre, velocity, radius, mass)` makes a rigid `BallState`; `run`
+gives a `BallRun` with `energy()`, `momentum()`, `configuration_entropy()`,
+`visitation_entropy()`, `shape_intact()` and `checks()`. Integer velocities only; walls are the
+self-loops, a bounce flips the hit component mid-step. Adding gravity means a velocity change
+per step (then energy is kinetic + potential); several balls need a collision rule between
+them. World 2 of the GUI calls `report.live.newton(request)`; `assets/newton.html` explains it.
+
 ## Conserving rules: the lattice gas (`graph/gas.py`)
 
 Walkers with a heading are hyperedges `{w, s, s'}` (`LatticeGasState`: `sites`,
