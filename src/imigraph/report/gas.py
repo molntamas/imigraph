@@ -83,7 +83,9 @@ def _system_blob(result: GasResult) -> dict[str, Any]:
     return blob
 
 
-def gas_page_data(comparison: GasComparison, demo: dict[str, Any] | None = None) -> dict[str, Any]:
+def gas_page_data(
+    comparison: GasComparison, demo: dict[str, Any] | None = None
+) -> dict[str, Any]:
     return {
         "gas": _system_blob(comparison.gas),
         "lattice": _system_blob(comparison.lattice),
@@ -170,9 +172,13 @@ def gas_fragments(comparison: GasComparison) -> dict[str, str]:
         "momentum_chart": svg.line_chart(
             [
                 svg.Series(f"{labels[0]}, x", t, momenta[0][:, 0], colors[0]),
-                svg.Series(f"{labels[0]}, y", t, momenta[0][:, 1], colors[0], dashed=True),
+                svg.Series(
+                    f"{labels[0]}, y", t, momenta[0][:, 1], colors[0], dashed=True
+                ),
                 svg.Series(f"{labels[1]}, x", t, momenta[1][:, 0], colors[1]),
-                svg.Series(f"{labels[1]}, y", t, momenta[1][:, 1], colors[1], dashed=True),
+                svg.Series(
+                    f"{labels[1]}, y", t, momenta[1][:, 1], colors[1], dashed=True
+                ),
             ],
             title="Total momentum (walls exchange momentum; exact with periodic walls)",
             xlabel="time",
@@ -207,7 +213,11 @@ def gas_fragments(comparison: GasComparison) -> dict[str, str]:
             edges,
             [
                 (f"{labels[0]} at t = {t[-1]:.4g}", gas_final, colors[0]),
-                (f"{labels[1]} at t = {t[-1]:.4g} (all at c)", lattice_final, colors[1]),
+                (
+                    f"{labels[1]} at t = {t[-1]:.4g} (all at c)",
+                    lattice_final,
+                    colors[1],
+                ),
             ],
             title="Final speed distributions: Maxwell-Boltzmann vs the single speed of HPP",
             xlabel="speed",
@@ -255,7 +265,9 @@ def write_gas_report(
     result = run_gas_comparison(config, lattice_config) if result is None else result
     path = Path(path)
     if path.suffix.lower() != ".html":
-        path = path / report_filename(label=label).replace("brownian_vs_graph", GAS_STEM, 1)
+        path = path / report_filename(label=label).replace(
+            "brownian_vs_graph", GAS_STEM, 1
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(build_gas_report(result), encoding="utf-8")
     write_index(path.parent)

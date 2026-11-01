@@ -8,7 +8,7 @@
 #
 # What is inside: Node 22 (Claude Code, npm tooling for the Pyodide/PyScript GUI), git, curl, jq,
 # gh (GitHub CLI), uv + Python 3.14 with the project's locked dependencies (numpy, scipy, networkx,
-# pytest, ruff), pre-commit (+ betterleaks), Claude Code CLI. The agent runs as the non-root user
+# pytest, ruff, ty), pre-commit (+ betterleaks), Claude Code CLI. The agent runs as the non-root user
 # "agent" (uid 1000). Sandcastle bind-mounts the repo worktree at /home/agent/workspace.
 #
 # Rebuild after changing .pre-commit-config.yaml, and after larger dependency changes in uv.lock

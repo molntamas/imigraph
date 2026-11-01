@@ -36,7 +36,11 @@ INDEX_FILENAME = "index.html"
 
 
 def _asset(name: str) -> str:
-    return resources.files("imigraph.report.assets").joinpath(name).read_text(encoding="utf-8")
+    return (
+        resources.files("imigraph.report.assets")
+        .joinpath(name)
+        .read_text(encoding="utf-8")
+    )
 
 
 def _rounded(array: np.ndarray, decimals: int = 3) -> list:
@@ -91,7 +95,9 @@ def default_rule_demo(
     simulation = GraphSimulation(lattice, rule or RandomHop(), step_time=1.0)
     start = lattice.node_index(3, 2) if size == 5 else lattice.center_node
     initial = walkers_at_node(lattice, start, walkers)
-    return simulation.run(initial, steps, np.random.default_rng(seed), record_paths=True)
+    return simulation.run(
+        initial, steps, np.random.default_rng(seed), record_paths=True
+    )
 
 
 def rule_descriptions(result: ExperimentResult) -> list[dict[str, str]]:
@@ -124,7 +130,9 @@ def _msd_chart(report: ComparisonReport, config: ExperimentConfig) -> str:
     data = report["msd"].data
     times = data["times"]
     theory = 4 * config.diffusion * times
-    limit = 1.5 * max(float(np.max(data["reference"])), float(np.max(data["candidate"])))
+    limit = 1.5 * max(
+        float(np.max(data["reference"])), float(np.max(data["candidate"]))
+    )
     visible = theory <= limit
     series = [
         svg.Series(
@@ -137,9 +145,15 @@ def _msd_chart(report: ComparisonReport, config: ExperimentConfig) -> str:
                 data["reference"] + 2 * data["reference_se"],
             ),
         ),
-        svg.Series(report.candidate_label, times, data["candidate"], svg.CANDIDATE_COLOR),
         svg.Series(
-            "free diffusion 4 D t", times[visible], theory[visible], svg.THEORY_COLOR, dashed=True
+            report.candidate_label, times, data["candidate"], svg.CANDIDATE_COLOR
+        ),
+        svg.Series(
+            "free diffusion 4 D t",
+            times[visible],
+            theory[visible],
+            svg.THEORY_COLOR,
+            dashed=True,
         ),
     ]
     return svg.line_chart(
@@ -154,7 +168,9 @@ def _marginal_chart(result: ExperimentResult, frame: int) -> str:
     box = result.reference.box
     edges = np.linspace(box.lower[0], box.upper[0], 41)
     reference_counts, _ = np.histogram(result.reference.positions[frame, :, 0], edges)
-    candidate_counts, _ = np.histogram(result.graph_projection.positions[frame, :, 0], edges)
+    candidate_counts, _ = np.histogram(
+        result.graph_projection.positions[frame, :, 0], edges
+    )
     return svg.histogram_chart(
         edges,
         [
@@ -203,13 +219,30 @@ def _metric_charts(result: ExperimentResult) -> dict[str, str]:
         ylabel="energy",
         zero_based=False,
     )
-    band = (np.full(t.shape, -2 * ref.momentum_std), np.full(t.shape, 2 * ref.momentum_std))
+    band = (
+        np.full(t.shape, -2 * ref.momentum_std),
+        np.full(t.shape, 2 * ref.momentum_std),
+    )
     momentum = svg.line_chart(
         [
-            svg.Series(f"{labels[0]}, x", t, ref.momentum[:, 0], svg.REFERENCE_COLOR, band=band),
-            svg.Series(f"{labels[0]}, y", t, ref.momentum[:, 1], svg.REFERENCE_COLOR, dashed=True),
+            svg.Series(
+                f"{labels[0]}, x", t, ref.momentum[:, 0], svg.REFERENCE_COLOR, band=band
+            ),
+            svg.Series(
+                f"{labels[0]}, y",
+                t,
+                ref.momentum[:, 1],
+                svg.REFERENCE_COLOR,
+                dashed=True,
+            ),
             svg.Series(f"{labels[1]}, x", t, cand.momentum[:, 0], svg.CANDIDATE_COLOR),
-            svg.Series(f"{labels[1]}, y", t, cand.momentum[:, 1], svg.CANDIDATE_COLOR, dashed=True),
+            svg.Series(
+                f"{labels[1]}, y",
+                t,
+                cand.momentum[:, 1],
+                svg.CANDIDATE_COLOR,
+                dashed=True,
+            ),
         ],
         title="Total momentum (interval means; band: +/- 2 standard deviations expected)",
         xlabel="time",
@@ -267,15 +300,22 @@ def _metric_charts(result: ExperimentResult) -> dict[str, str]:
     }
 
 
-def _checks_table(report: ComparisonReport, informative: Sequence[CheckResult] = ()) -> str:
+def _checks_table(
+    report: ComparisonReport, informative: Sequence[CheckResult] = ()
+) -> str:
     """``informative`` checks are listed after the real ones with the verdict ``info``: they are
     reported for understanding but do not count (a lattice gas has no Maxwell distribution)."""
     rows = []
-    for check, counts in [(c, True) for c in report.results] + [(c, False) for c in informative]:
+    for check, counts in [(c, True) for c in report.results] + [
+        (c, False) for c in informative
+    ]:
         if counts:
             verdict, css = ("pass", "pass") if check.passed else ("FAIL", "fail")
         else:
-            verdict, css = ("info: would pass" if check.passed else "info: would fail"), "muted"
+            verdict, css = (
+                ("info: would pass" if check.passed else "info: would fail"),
+                "muted",
+            )
         relation = "&gt;" if check.larger_is_better else "&le;"
         rows.append(
             f'<tr><td><code>{escape(check.name)}</code></td><td class="{css}">{verdict}'
@@ -375,7 +415,9 @@ def build_report(
         demo_walkers=demo.num_walkers,
         num_marginal_times=len(report["marginals"].data["frames"]),
         occupancy_bins=report["occupancy"].data["reference"].shape[0],
-        data_json=json.dumps(page_data(result, demo, max_particles), separators=(",", ":")),
+        data_json=json.dumps(
+            page_data(result, demo, max_particles), separators=(",", ":")
+        ),
         **fragments(result),
     )
 
@@ -394,8 +436,16 @@ def write_index(directory: Path) -> Path:
         if page.name == INDEX_FILENAME:
             continue
         text = page.read_text(encoding="utf-8", errors="replace")
-        verdict = "pass" if 'class="badge pass"' in text else "fail" if "badge fail" in text else ""
-        modified = datetime.fromtimestamp(page.stat().st_mtime, UTC).strftime("%Y-%m-%d %H:%M UTC")
+        verdict = (
+            "pass"
+            if 'class="badge pass"' in text
+            else "fail"
+            if "badge fail" in text
+            else ""
+        )
+        modified = datetime.fromtimestamp(page.stat().st_mtime, UTC).strftime(
+            "%Y-%m-%d %H:%M UTC"
+        )
         size = page.stat().st_size / 1e6
         rows.append(
             f'<tr><td><a href="{escape(page.name)}">{escape(page.name)}</a></td>'
@@ -408,7 +458,9 @@ def write_index(directory: Path) -> Path:
         if rows
         else "<p>No reports yet.</p>"
     )
-    page = Template(_asset("index.html")).substitute(css=_asset("report.css"), body=body)
+    page = Template(_asset("index.html")).substitute(
+        css=_asset("report.css"), body=body
+    )
     index = directory / INDEX_FILENAME
     index.write_text(page, encoding="utf-8")
     return index

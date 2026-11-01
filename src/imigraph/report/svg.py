@@ -84,8 +84,10 @@ class Axes:
     def frame(self, title: str, xlabel: str, ylabel: str) -> list[str]:
         parts = [
             f'<rect width="{self.width}" height="{self.height}" fill="white"/>',
-            f'<text x="{self.left}" y="20" font-size="14" font-weight="600" '
-            f'fill="{AXIS_COLOR}">{escape(title)}</text>',
+            (
+                f'<text x="{self.left}" y="20" font-size="14" font-weight="600" '
+                f'fill="{AXIS_COLOR}">{escape(title)}</text>'
+            ),
         ]
         for tick in _nice_ticks(*self.x_range):
             x = self.px(tick)
@@ -165,7 +167,12 @@ def line_chart(
     xs = np.concatenate([np.asarray(s.x, dtype=float) for s in series])
     ys = np.concatenate(
         [np.asarray(s.y, dtype=float) for s in series]
-        + [np.asarray(b, dtype=float) for s in series if s.band is not None for b in s.band]
+        + [
+            np.asarray(b, dtype=float)
+            for s in series
+            if s.band is not None
+            for b in s.band
+        ]
     )
     y_high = max(float(np.nanmax(ys)), 0.0) if ys.size else 1.0
     y_low = min(float(np.nanmin(ys)), 0.0) if ys.size else 0.0
@@ -188,13 +195,16 @@ def line_chart(
         if s.band is not None:
             low, high = s.band
             upper = " ".join(
-                f"{axes.px(x):.1f},{axes.py(y):.1f}" for x, y in zip(s.x, high, strict=True)
+                f"{axes.px(x):.1f},{axes.py(y):.1f}"
+                for x, y in zip(s.x, high, strict=True)
             )
             lower = " ".join(
                 f"{axes.px(x):.1f},{axes.py(y):.1f}"
                 for x, y in zip(s.x[::-1], low[::-1], strict=True)
             )
-            parts.append(f'<polygon points="{upper} {lower}" fill="{s.color}" opacity="0.15"/>')
+            parts.append(
+                f'<polygon points="{upper} {lower}" fill="{s.color}" opacity="0.15"/>'
+            )
         points = " ".join(
             f"{axes.px(x):.1f},{axes.py(y):.1f}" for x, y in zip(s.x, s.y, strict=True)
         )
@@ -224,7 +234,9 @@ def histogram_chart(
     top = max(float(np.max(c)) for _, c, _ in counts) if counts else 1.0
     for curve in curves or []:
         top = max(top, float(np.nanmax(curve.y)))
-    axes = Axes(width, height, (float(edges[0]), float(edges[-1])), (0.0, top * 1.1 or 1.0))
+    axes = Axes(
+        width, height, (float(edges[0]), float(edges[-1])), (0.0, top * 1.1 or 1.0)
+    )
     parts = axes.frame(title, xlabel, ylabel)
     for _label, values, color in counts:
         points = [f"{axes.px(edges[0]):.1f},{axes.py(0):.1f}"]
@@ -238,7 +250,8 @@ def histogram_chart(
         )
     for curve in curves or []:
         points = " ".join(
-            f"{axes.px(x):.1f},{axes.py(y):.1f}" for x, y in zip(curve.x, curve.y, strict=True)
+            f"{axes.px(x):.1f},{axes.py(y):.1f}"
+            for x, y in zip(curve.x, curve.y, strict=True)
         )
         dash = ' stroke-dasharray="6 4"' if curve.dashed else ""
         parts.append(

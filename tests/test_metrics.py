@@ -53,10 +53,10 @@ def test_aggregate_per_interval_means_blocks():
 def test_entropy_of_point_and_uniform_occupancies():
     box = Box.square(1.0)
     point = np.full((1, 1000, 2), 0.5)
-    assert occupancy_entropy(Trajectory([0.0], point, box), bins=4)[0] == 0.0
+    assert occupancy_entropy(Trajectory(np.zeros(1), point, box), bins=4)[0] == 0.0
     rng = np.random.default_rng(0)
     uniform = rng.random((1, 100_000, 2))
-    entropy = occupancy_entropy(Trajectory([0.0], uniform, box), bins=4)[0]
+    entropy = occupancy_entropy(Trajectory(np.zeros(1), uniform, box), bins=4)[0]
     assert entropy == pytest.approx(np.log(16), abs=0.01)
 
 

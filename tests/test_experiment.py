@@ -19,7 +19,11 @@ def test_config_derives_diffusion_and_validates():
 
 
 def test_seed_makes_the_experiment_reproducible():
-    first = run_experiment(ExperimentConfig(particles=50, steps=100, record_every=10, seed=5))
-    second = run_experiment(ExperimentConfig(particles=50, steps=100, record_every=10, seed=5))
+    first = run_experiment(
+        ExperimentConfig(particles=50, steps=100, record_every=10, seed=5)
+    )
+    second = run_experiment(
+        ExperimentConfig(particles=50, steps=100, record_every=10, seed=5)
+    )
     assert (first.reference.positions == second.reference.positions).all()
     assert (first.graph_history.anchors == second.graph_history.anchors).all()

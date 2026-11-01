@@ -13,7 +13,12 @@ import numpy as np
 import pytest
 
 from imigraph.compare import compare
-from imigraph.experiments import ExperimentConfig, run_experiment, run_graph, run_reference
+from imigraph.experiments import (
+    ExperimentConfig,
+    run_experiment,
+    run_graph,
+    run_reference,
+)
 
 CONFIG = ExperimentConfig()
 
@@ -27,7 +32,9 @@ def best_of(runs: int, function: Callable[[], object]) -> float:
     return best
 
 
-def assert_within_budget(label: str, seconds: float, function: Callable[[], object]) -> None:
+def assert_within_budget(
+    label: str, seconds: float, function: Callable[[], object]
+) -> None:
     elapsed = best_of(2, function)
     assert elapsed < seconds, f"{label} took {elapsed:.2f} s, budget {seconds} s"
 
@@ -42,13 +49,17 @@ def test_reference_simulation_budget():
 
 def test_graph_simulation_budget():
     assert_within_budget(
-        "graph (2000 walkers, 3000 steps)", 0.5, lambda: run_graph(CONFIG, np.random.default_rng(0))
+        "graph (2000 walkers, 3000 steps)",
+        0.5,
+        lambda: run_graph(CONFIG, np.random.default_rng(0)),
     )
 
 
 def test_comparison_budget():
     reference = run_reference(CONFIG, np.random.default_rng(0))
-    candidate = run_graph(CONFIG, np.random.default_rng(1)).project(np.random.default_rng(2))
+    candidate = run_graph(CONFIG, np.random.default_rng(1)).project(
+        np.random.default_rng(2)
+    )
     assert_within_budget("comparison", 0.5, lambda: compare(reference, candidate))
 
 

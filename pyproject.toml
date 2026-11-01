@@ -17,6 +17,7 @@ dev = [
   "playwright==1.64.1",
   "pytest>=9",
   "ruff>=0.17.3",
+  "ty>=0.0.95",
 ]
 
 [build-system]
@@ -30,9 +31,8 @@ packages = ["src/imigraph"]
 testpaths = ["tests"]
 addopts = "-q"
 
-[tool.ruff]
-line-length = 100
-target-version = "py314"
-
+# ruff and ty run with their default configuration. The one exception: EXE002 (executable file
+# without shebang) fires for every file inside the Docker container, where the Windows bind mount
+# reports all files as executable; the files are 644 in git.
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "NPY"]
+ignore = ["EXE002"]

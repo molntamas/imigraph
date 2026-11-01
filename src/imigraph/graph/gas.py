@@ -82,7 +82,9 @@ class LatticeGasState:
         sites = np.asarray(self.sites, dtype=np.int64)
         directions = np.asarray(self.directions, dtype=np.int64)
         if sites.shape != directions.shape or sites.ndim != 1:
-            raise ValueError("sites and directions must be 1D arrays of the same length")
+            raise ValueError(
+                "sites and directions must be 1D arrays of the same length"
+            )
         if sites.size and (sites.min() < 0 or sites.max() >= self.space.num_nodes):
             raise ValueError("sites must be valid node indices")
         if directions.size and (directions.min() < 0 or directions.max() > 3):
@@ -145,7 +147,9 @@ class LatticeGas:
         from_wall = self.space.neighbors[nodes, OPPOSITE[directions]] == nodes
         channels = channels[~from_wall]
         if count > channels.size:
-            raise ValueError(f"{count} walkers do not fit into {channels.size} channels")
+            raise ValueError(
+                f"{count} walkers do not fit into {channels.size} channels"
+            )
         chosen = rng.choice(channels, size=count, replace=False)
         return LatticeGasState(self.space, chosen // 4, chosen % 4)
 
@@ -185,7 +189,8 @@ class LatticeGas:
         """Apply Reflect: walkers heading into a self-loop turn round."""
         wall = state.headings() == state.sites
         return replace(
-            state, directions=np.where(wall, OPPOSITE[state.directions], state.directions)
+            state,
+            directions=np.where(wall, OPPOSITE[state.directions], state.directions),
         )
 
     def stream(self, state: LatticeGasState) -> LatticeGasState:
@@ -232,7 +237,9 @@ class LatticeGas:
                 interval = 0
         times = self.step_time * record_every * np.arange(len(frames))
         trajectory = Trajectory(times, np.stack(frames), self.space.box)
-        return GasRun(trajectory, np.stack(velocities), np.asarray(collisions), self.mass)
+        return GasRun(
+            trajectory, np.stack(velocities), np.asarray(collisions), self.mass
+        )
 
     def simulate_states(
         self, initial: LatticeGasState, steps: int, rng: np.random.Generator
@@ -246,7 +253,9 @@ class LatticeGas:
             collisions.append(collided)
         return states, collisions
 
-    def demo_dict(self, initial: LatticeGasState, steps: int, rng: np.random.Generator) -> dict:
+    def demo_dict(
+        self, initial: LatticeGasState, steps: int, rng: np.random.Generator
+    ) -> dict:
         """JSON-serialisable short run: space, per-frame sites and directions, collision sites."""
         states, collisions = self.simulate_states(initial, steps, rng)
         space = self.space

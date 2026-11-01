@@ -54,7 +54,9 @@ class StepObserver:
         self.num_particles = int(delta.shape[0])
         self.mean_squared.append(float(np.mean(np.sum(delta**2, axis=1))))
         self.summed.append(delta.sum(axis=0))
-        self.wall_fraction.append(0.0 if wall_hits is None else float(np.mean(wall_hits)))
+        self.wall_fraction.append(
+            0.0 if wall_hits is None else float(np.mean(wall_hits))
+        )
 
     @property
     def steps(self) -> int:
@@ -196,10 +198,14 @@ def compute_metrics(
         energy=aggregate_per_interval(observer.kinetic_energy(dt, mass), record_every),
         momentum=aggregate_per_interval(observer.momentum(dt, mass), record_every),
         entropy=occupancy_entropy(trajectory, bins),
-        wall_rate=aggregate_per_interval(np.asarray(observer.wall_fraction), record_every),
+        wall_rate=aggregate_per_interval(
+            np.asarray(observer.wall_fraction), record_every
+        ),
         occupied=occupied_cells(trajectory, cells),
         expected_energy=2 * mass * diffusion / dt,
-        momentum_std=float(np.sqrt(2 * n * mass**2 * diffusion / dt) / np.sqrt(record_every)),
+        momentum_std=float(
+            np.sqrt(2 * n * mass**2 * diffusion / dt) / np.sqrt(record_every)
+        ),
         max_entropy=float(np.log(bins * bins)),
         num_cells=cells * cells,
         expected_occupied=expected_occupied_cells(n, cells),

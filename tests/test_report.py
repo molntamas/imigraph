@@ -14,7 +14,9 @@ from imigraph.report import (
     write_report,
 )
 
-SMALL = ExperimentConfig(particles=100, steps=200, record_every=20, lattice_size=21, seed=3)
+SMALL = ExperimentConfig(
+    particles=100, steps=200, record_every=20, lattice_size=21, seed=3
+)
 
 
 @pytest.fixture(scope="module")
@@ -38,7 +40,10 @@ def test_page_is_self_contained_and_has_every_section(page):
 
 
 def test_embedded_data_matches_the_experiment(page):
-    blob = re.search(r'<script id="data" type="application/json">(.*?)</script>', page, re.S)
+    blob = re.search(
+        r'<script id="data" type="application/json">(.*?)</script>', page, re.DOTALL
+    )
+    assert blob is not None
     data = json.loads(blob.group(1))
     assert len(data["reference"]["times"]) == 11
     assert len(data["reference"]["positions"][0]) == 100
@@ -46,7 +51,10 @@ def test_embedded_data_matches_the_experiment(page):
     assert data["report"]["checks"][0]["name"] == "msd"
     assert data["config"]["seed"] == 3
     assert data["rules"][0]["name"] == "RandomHop"
-    assert len(data["rule"]["space"]["neighbors"]) == 25 and len(data["rule"]["anchors"]) == 25
+    assert (
+        len(data["rule"]["space"]["neighbors"]) == 25
+        and len(data["rule"]["anchors"]) == 25
+    )
     assert "The rule, explained" in page
     assert (
         "<th>RandomHop</th><td><code>{w,s}, {s,s&#x27;} -&gt; {w,s&#x27;}, {s,s&#x27;}</code>"

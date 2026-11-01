@@ -33,9 +33,13 @@ def test_oblique_collision_conserves_energy_and_momentum():
     v = np.array([[1.0, 0.2], [-0.5, 0.1]])
     run = gas.simulate(x, v, steps=100)
     assert run.collisions.sum() == 1
-    np.testing.assert_allclose(run.kinetic_energy(), run.kinetic_energy()[0], rtol=1e-12)
+    np.testing.assert_allclose(
+        run.kinetic_energy(), run.kinetic_energy()[0], rtol=1e-12
+    )
     np.testing.assert_allclose(run.momentum() - run.momentum()[0], 0.0, atol=1e-12)
-    assert not np.allclose(run.velocities[-1], v)  # the collision did change the velocities
+    assert not np.allclose(
+        run.velocities[-1], v
+    )  # the collision did change the velocities
 
 
 def test_wall_reflection_keeps_speed_and_flips_one_component():
@@ -47,7 +51,9 @@ def test_wall_reflection_keeps_speed_and_flips_one_component():
 
 
 def test_periodic_walls_conserve_momentum_exactly():
-    config = GasConfig(particles=40, steps=400, record_every=20, boundary="periodic", seed=4)
+    config = GasConfig(
+        particles=40, steps=400, record_every=20, boundary="periodic", seed=4
+    )
     result = run_gas(config)
     momentum = result.run.momentum()
     np.testing.assert_allclose(momentum - momentum[0], 0.0, atol=1e-12)
@@ -57,7 +63,9 @@ def test_periodic_walls_conserve_momentum_exactly():
 
 def test_energy_is_conserved_to_rounding(result):
     energy = result.run.kinetic_energy()
-    assert energy[0] == pytest.approx(0.5 * result.config.particles * result.config.speed**2)
+    assert energy[0] == pytest.approx(
+        0.5 * result.config.particles * result.config.speed**2
+    )
     np.testing.assert_allclose(energy, energy[0], rtol=1e-12)
     assert result.report["energy"].passed
 
@@ -70,7 +78,9 @@ def test_disks_stay_inside_the_box_and_collide(result):
 def test_speeds_relax_to_maxwell_boltzmann(result):
     run = result.run
     rayleigh = stats.rayleigh(scale=run.thermal_sigma)
-    assert stats.kstest(run.speeds(0), rayleigh.cdf).pvalue < 1e-6  # all equal at the start
+    assert (
+        stats.kstest(run.speeds(0), rayleigh.cdf).pvalue < 1e-6
+    )  # all equal at the start
     assert stats.kstest(run.speeds(-1), rayleigh.cdf).pvalue > 1e-3
     assert result.report["maxwell"].passed
 

@@ -34,7 +34,9 @@ class Box:
 
     @property
     def center(self) -> np.ndarray:
-        return (np.asarray(self.lower, dtype=float) + np.asarray(self.upper, dtype=float)) / 2
+        return (
+            np.asarray(self.lower, dtype=float) + np.asarray(self.upper, dtype=float)
+        ) / 2
 
     def contains(self, points: np.ndarray) -> np.ndarray:
         """Boolean mask over the leading axes of ``points`` (shape ``(..., 2)``)."""
@@ -67,9 +69,13 @@ class Trajectory:
         if times.ndim != 1:
             raise ValueError(f"times must be 1D, got shape {times.shape}")
         if positions.ndim != 3 or positions.shape[2] != 2:
-            raise ValueError(f"positions must have shape (T, n, 2), got {positions.shape}")
+            raise ValueError(
+                f"positions must have shape (T, n, 2), got {positions.shape}"
+            )
         if positions.shape[0] != times.shape[0]:
-            raise ValueError(f"{positions.shape[0]} frames of positions but {times.shape[0]} times")
+            raise ValueError(
+                f"{positions.shape[0]} frames of positions but {times.shape[0]} times"
+            )
         object.__setattr__(self, "times", times)
         object.__setattr__(self, "positions", positions)
 

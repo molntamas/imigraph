@@ -30,6 +30,13 @@ UNIFORM = (0.25, 0.25, 0.25, 0.25)
 
 @runtime_checkable
 class Rule(Protocol):
+    @property
+    def name(self) -> str: ...
+
+    def describe(self, spacing: float = 1.0, step_time: float = 1.0) -> dict[str, str]:
+        """Human-readable description for reports and GUIs."""
+        ...
+
     def apply(self, state: WalkerGraph, rng: np.random.Generator) -> WalkerGraph:
         """Return the state after one step."""
         ...
@@ -71,7 +78,9 @@ class RandomHop:
     matches = "one match per edge {s,s'} at the anchor s of walker w; self-loops {s,s} included"
     choice = "one match per walker, uniformly at random; all walkers rewritten at once"
     invariants = "number of walkers, one anchoring edge per walker, the space graph"
-    physics = "random walk with step a per application: D = a^2 / (4 tau); self-loops reflect"
+    physics = (
+        "random walk with step a per application: D = a^2 / (4 tau); self-loops reflect"
+    )
 
     def describe(self, spacing: float = 1.0, step_time: float = 1.0) -> dict[str, str]:
         """Human-readable description of the rule for reports and GUIs (the arguments are
@@ -133,7 +142,9 @@ class RuleSpec:
                 for body in _EDGE.findall(text)
             )
             if not edges:
-                raise ValueError(f"no edges found in {text.strip()!r}; write edges as {{a,b}}")
+                raise ValueError(
+                    f"no edges found in {text.strip()!r}; write edges as {{a,b}}"
+                )
             if any(len(edge) < 2 for edge in edges):
                 raise ValueError("every edge needs at least two variables, e.g. {w,s}")
             sides.append(edges)
@@ -176,7 +187,7 @@ class RuleSpec:
 
     @property
     def notation(self) -> str:
-        edges = lambda side: ", ".join("{" + ",".join(edge) + "}" for edge in side)  # noqa: E731
+        edges = lambda side: ", ".join("{" + ",".join(edge) + "}" for edge in side)
         return f"{edges(self.lhs)} -> {edges(self.rhs)}"
 
     # ---------- structure ----------
@@ -190,11 +201,19 @@ class RuleSpec:
         return tuple(seen)
 
     def type_of(self, variable: str) -> str:
-        return self.types.get(variable, "walker" if variable.startswith("w") else "site")
+        return self.types.get(
+            variable, "walker" if variable.startswith("w") else "site"
+        )
 
     def __post_init__(self) -> None:
-        if len(self.weights) != 4 or any(w < 0 for w in self.weights) or sum(self.weights) <= 0:
-            raise ValueError("weights must be four non-negative numbers (+x, -x, +y, -y)")
+        if (
+            len(self.weights) != 4
+            or any(w < 0 for w in self.weights)
+            or sum(self.weights) <= 0
+        ):
+            raise ValueError(
+                "weights must be four non-negative numbers (+x, -x, +y, -y)"
+            )
         if self.self_loops not in ("allow", "forbid"):
             raise ValueError("self_loops must be 'allow' or 'forbid'")
         self.chain()  # validate the pattern early, with a message for the editor
@@ -202,7 +221,9 @@ class RuleSpec:
     def chain(self) -> tuple[str, list[str], int]:
         """Check that the spec is a walker-anchored chain rule and return
         ``(walker, [s0, s1, ..., sk], target index)``. Raises ``ValueError`` otherwise."""
-        walker_edges = [e for e in self.lhs if any(self.type_of(v) == "walker" for v in e)]
+        walker_edges = [
+            e for e in self.lhs if any(self.type_of(v) == "walker" for v in e)
+        ]
         site_edges = [e for e in self.lhs if e not in walker_edges]
         if len(walker_edges) != 1:
             raise ValueError(
@@ -210,7 +231,10 @@ class RuleSpec:
                 "pattern; interaction rules are not supported by the chain rule family)"
             )
         anchor_edge = walker_edges[0]
-        if len(anchor_edge) != 2 or sum(self.type_of(v) == "walker" for v in anchor_edge) != 1:
+        if (
+            len(anchor_edge) != 2
+            or sum(self.type_of(v) == "walker" for v in anchor_edge) != 1
+        ):
             raise ValueError("the walker edge must join one walker and one site: {w,s}")
         walker = next(v for v in anchor_edge if self.type_of(v) == "walker")
         start = next(v for v in anchor_edge if v != walker)
@@ -219,7 +243,9 @@ class RuleSpec:
         while remaining:
             for edge in remaining:
                 if len(edge) != 2:
-                    raise ValueError(f"site edges must have two ends, got {{{','.join(edge)}}}")
+                    raise ValueError(
+                        f"site edges must have two ends, got {{{','.join(edge)}}}"
+                    )
                 a, b = edge
                 if a == chain[-1] and b not in chain:
                     chain.append(b)
@@ -237,12 +263,18 @@ class RuleSpec:
         rhs_walker = [e for e in self.rhs if walker in e]
         rhs_sites = [e for e in self.rhs if walker not in e]
         if len(rhs_walker) != 1 or len(rhs_walker[0]) != 2:
-            raise ValueError("the right side must re-attach the walker by exactly one edge {w,s}")
+            raise ValueError(
+                "the right side must re-attach the walker by exactly one edge {w,s}"
+            )
         target = next(v for v in rhs_walker[0] if v != walker)
         if target not in chain:
-            raise ValueError(f"the walker must end on a site of the chain, not on {target!r}")
+            raise ValueError(
+                f"the walker must end on a site of the chain, not on {target!r}"
+            )
         if sorted(map(frozenset, rhs_sites)) != sorted(map(frozenset, site_edges)):
-            raise ValueError("the space is static: the right side must keep the site edges")
+            raise ValueError(
+                "the space is static: the right side must keep the site edges"
+            )
         return walker, chain, chain.index(target)
 
     # ---------- physics ----------
@@ -267,7 +299,9 @@ class RuleSpec:
         of the displacement per step over ``2 tau``. Uniform weights give ``a^2 / (4 tau)`` per
         hop, the value of :func:`~imigraph.graph.simulation.lattice_hop_diffusion`."""
         w = self.normalized_weights
-        var = np.array([w[0] + w[1] - (w[0] - w[1]) ** 2, w[2] + w[3] - (w[2] - w[3]) ** 2])
+        var = np.array(
+            [w[0] + w[1] - (w[0] - w[1]) ** 2, w[2] + w[3] - (w[2] - w[3]) ** 2]
+        )
         return self.hops * spacing**2 * var / (2 * step_time)
 
     def describe(self, spacing: float = 1.0, step_time: float = 1.0) -> dict[str, str]:
@@ -276,7 +310,9 @@ class RuleSpec:
         w = self.normalized_weights
         drift = self.drift(spacing, step_time)
         diffusion = self.diffusion(spacing, step_time)
-        weights = ", ".join(f"{n} {p:.3g}" for n, p in zip(DIRECTION_NAMES, w, strict=True))
+        weights = ", ".join(
+            f"{n} {p:.3g}" for n, p in zip(DIRECTION_NAMES, w, strict=True)
+        )
         loops = (
             "self-loops {s,s} included (a walker at the wall may stay)"
             if self.self_loops == "allow"

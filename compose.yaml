@@ -4,6 +4,7 @@
 #   docker compose build dev                               # build the image (once, or after Dockerfile changes)
 #   docker compose run --rm dev uv run pytest              # tests
 #   docker compose run --rm dev uv run ruff check .        # lint
+#   docker compose run --rm dev uv run ty check            # type check
 #   docker compose run --rm dev pre-commit run --all-files # what the commit hook runs
 #   docker compose run --rm dev python -m imigraph report  # write output/*.html
 #   docker compose run --rm dev git commit -m "..."        # commit with the hooks of the container

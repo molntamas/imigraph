@@ -27,12 +27,19 @@ LATTICE = SquareLattice(SIZE, SPACING)
 STEPS, RECORD_EVERY, PARTICLES = 3000, 50, 2000
 
 
-def brownian(seed: int, diffusion: float = DIFFUSION, drift=(0.0, 0.0), box=None) -> Trajectory:
+def brownian(
+    seed: int, diffusion: float = DIFFUSION, drift=(0.0, 0.0), box=None
+) -> Trajectory:
     box = LATTICE.box if box is None else box
     system = BrownianBox(diffusion=diffusion, dt=STEP_TIME, box=box)
     rng = np.random.default_rng(seed)
-    trajectory = system.simulate(system.all_at(box.center, PARTICLES), STEPS, rng, RECORD_EVERY)
-    if drift != (0.0, 0.0):  # add a ballistic component, reflected at the walls like the rest
+    trajectory = system.simulate(
+        system.all_at(box.center, PARTICLES), STEPS, rng, RECORD_EVERY
+    )
+    if drift != (
+        0.0,
+        0.0,
+    ):  # add a ballistic component, reflected at the walls like the rest
         shift = trajectory.times[:, None, None] * np.asarray(drift)[None, None, :]
         positions = reflect_into_box(trajectory.positions + shift, box)
         trajectory = Trajectory(trajectory.times, positions, box)
@@ -77,7 +84,9 @@ def test_smaller_box_fails(reference):
     )
     candidate = brownian(6, box=small)
     # Same times, same centre, but confined earlier: MSD saturates lower.
-    report = compare(reference, Trajectory(candidate.times, candidate.positions, LATTICE.box))
+    report = compare(
+        reference, Trajectory(candidate.times, candidate.positions, LATTICE.box)
+    )
     assert not report.passed
     assert not report["msd"].passed
 
@@ -97,10 +106,20 @@ def test_graph_with_mismatched_diffusion_fails(reference):
 
 
 def test_report_structure_and_markdown(reference):
-    checks = (MsdCheck(max_sigma=5.0), MarginalKsCheck(num_frames=2), OccupancyCheck(bins=3))
-    report = compare(reference, brownian(9), checks=checks, candidate_label="other seed")
+    checks = (
+        MsdCheck(max_sigma=5.0),
+        MarginalKsCheck(num_frames=2),
+        OccupancyCheck(bins=3),
+    )
+    report = compare(
+        reference, brownian(9), checks=checks, candidate_label="other seed"
+    )
     assert isinstance(report, ComparisonReport)
-    assert [result.name for result in report.results] == ["msd", "marginals", "occupancy"]
+    assert [result.name for result in report.results] == [
+        "msd",
+        "marginals",
+        "occupancy",
+    ]
     assert report["marginals"].data["pvalues"].shape == (2, 2)
     data = report.to_dict()
     assert data["passed"] is True and len(data["checks"]) == 3

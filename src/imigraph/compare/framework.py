@@ -38,8 +38,10 @@ class ComparisonReport:
 
     def to_markdown(self) -> str:
         lines = [
-            f"Candidate **{self.candidate_label}** vs reference **{self.reference_label}**: "
-            f"{'PASS' if self.passed else 'FAIL'}",
+            (
+                f"Candidate **{self.candidate_label}** vs reference **{self.reference_label}**: "
+                f"{'PASS' if self.passed else 'FAIL'}"
+            ),
             "",
             "| check | verdict | value | threshold | detail |",
             "| --- | --- | --- | --- | --- |",

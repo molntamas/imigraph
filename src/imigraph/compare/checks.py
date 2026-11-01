@@ -44,7 +44,8 @@ class CheckResult:
 
 @runtime_checkable
 class Check(Protocol):
-    name: str
+    @property
+    def name(self) -> str: ...
 
     def run(self, reference: Trajectory, candidate: Trajectory) -> CheckResult: ...
 
@@ -53,7 +54,9 @@ def _frames_to_test(num_frames: int, count: int) -> np.ndarray:
     """``count`` frame indices spread evenly over ``1 .. num_frames - 1`` (last one included)."""
     if num_frames < 2:
         raise ValueError("trajectories need at least two frames")
-    return np.unique(np.linspace(1, num_frames - 1, min(count, num_frames - 1)).round().astype(int))
+    return np.unique(
+        np.linspace(1, num_frames - 1, min(count, num_frames - 1)).round().astype(int)
+    )
 
 
 @dataclass(frozen=True)
@@ -73,7 +76,10 @@ class MsdCheck:
 
     def run(self, reference: Trajectory, candidate: Trajectory) -> CheckResult:
         msd_r, msd_c = reference.msd()[1:], candidate.msd()[1:]
-        se_r, se_c = reference.msd_standard_error()[1:], candidate.msd_standard_error()[1:]
+        se_r, se_c = (
+            reference.msd_standard_error()[1:],
+            candidate.msd_standard_error()[1:],
+        )
         combined = np.sqrt(se_r**2 + se_c**2)
         with np.errstate(divide="ignore", invalid="ignore"):
             sigma = np.where(combined > 0, np.abs(msd_c - msd_r) / combined, 0.0)
@@ -127,7 +133,8 @@ class MarginalKsCheck:
         for row, frame in enumerate(frames):
             for axis in range(2):
                 result = stats.ks_2samp(
-                    reference.positions[frame, :, axis], candidate.positions[frame, :, axis]
+                    reference.positions[frame, :, axis],
+                    candidate.positions[frame, :, axis],
                 )
                 pvalues[row, axis] = result.pvalue
                 statistics[row, axis] = result.statistic
@@ -146,7 +153,11 @@ class MarginalKsCheck:
                 f"{statistics[row, axis]:.3f}); {pvalues.size} tests, "
                 f"Bonferroni threshold {threshold:.3g}"
             ),
-            data={"frames": frames, "times": reference.times[frames], "pvalues": pvalues},
+            data={
+                "frames": frames,
+                "times": reference.times[frames],
+                "pvalues": pvalues,
+            },
         )
 
 
@@ -185,7 +196,11 @@ class OccupancyCheck:
             value, statistic, dof = 1.0, 0.0, 0
         else:
             result = stats.chi2_contingency(table)
-            value, statistic, dof = float(result.pvalue), float(result.statistic), int(result.dof)
+            value, statistic, dof = (
+                float(result.pvalue),
+                float(result.statistic),
+                int(result.dof),
+            )
         return CheckResult(
             name=self.name,
             passed=bool(value > self.alpha),
